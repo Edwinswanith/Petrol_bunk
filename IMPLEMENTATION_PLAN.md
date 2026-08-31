@@ -12,7 +12,7 @@
 
 The first implementation deliberately uses the simplified model chosen after the original planning conversation: one owner, one outlet, one active shift, one petrol nozzle/tank, and one diesel nozzle/tank. It includes staff records, daily attendance, one operator-to-machine allocation per shift, totalizer-based operator performance and handover variance, shift opening and immutable closing, test-fuel handling, fuel receipts, expenses, density/water checks, deterministic reconciliation, live owner views, and a daily CSV export.
 
-To keep this first release honest and small, it does not yet include closed-record corrections, transactional packaged-goods inventory, attachments/offline drafts, configurable multi-nozzle equipment, or public-deployment authentication. Those remain later production-pilot work in the sections below. Local review mode uses seeded in-memory data; MongoDB enables persistence.
+To keep this first release honest and small, it does not include closed-record corrections, transactional packaged-goods inventory, attachments/offline drafts, configurable multi-nozzle equipment, accounts, authentication, or user sessions. The workspace is owner-operated and should remain on an owner-controlled device or private network. Local review mode uses seeded in-memory data; MongoDB enables persistence.
 
 ---
 
@@ -71,7 +71,7 @@ This is consistent with the [HPCL Marketing Discipline Guidelines 2024](https://
 **P0 — pilot cannot launch without it**
 
 - Outlet/equipment/basic staff-name/shift setup and opening balances.
-- One secure owner account and session recovery.
+- One owner-operated workspace with direct manual entry and no account setup.
 - Shift opening, operation, closing, handover, and locking.
 - Nozzle, tank, density, water-dip, equipment-check, and test-dispense capture.
 - Effective-dated selling prices and price-boundary readings.
@@ -108,7 +108,7 @@ There is one application user: the petrol pump owner. Staff may tell the owner r
 
 ### 2.1 What stays simple
 
-- One owner account for one outlet.
+- One owner-operated workspace for the forecourt.
 - One unified interface on phone and desktop.
 - No roles, invitations, staff PINs, permission matrix, approval inbox, or separation-of-duties workflow.
 - Staff can be stored as simple operational records so the owner can note who worked a shift; a staff record is not a user account.
@@ -124,7 +124,7 @@ Single-user does not mean calculations or history can be unsafe:
 - Closed shifts are immutable in the first release; no correction command is exposed.
 - A later correction feature must append a new version while preserving the original values and totals.
 - Critical calculations remain server-side, decimal-safe, transactional, and idempotent.
-- Authentication, encrypted transport/storage, backups, private attachments, and session recovery remain required.
+- Backups and protected network/device access remain required; accounts and sessions can be reconsidered only if public or delegated access is introduced later.
 - If staff accounts are added later, they will be a separate scoped feature rather than dormant role complexity in v1.
 
 ---
@@ -134,8 +134,8 @@ Single-user does not mean calculations or history can be unsafe:
 ### 3.1 Physical hierarchy
 
 ```text
-Owner account
-└── Outlet
+Owner workspace
+└── Forecourt operations
     ├── Tanks
     │   └── Fuel product (MS/petrol, HSD/diesel, future grades)
     ├── Dispensers
@@ -295,7 +295,7 @@ Until the accountant confirms commission, taxes, freight, evaporation/loss treat
 **Actor:** Owner, assisted by implementation team
 **Goal:** Make the first live shift structurally valid.
 
-1. Create the owner account and outlet; configure name, address, timezone, currency, business-day start, and contact details.
+1. Confirm the fixed timezone, currency, business-day start, and forecourt equipment configuration; no owner identity or outlet naming step is required.
 2. Select the OMC/dealership policy profile or create a reviewed custom profile.
 3. Create fuel products and their display labels.
 4. Add tanks with code, product, capacity, calibration/dip reference, safe fill level, reorder level, and active status.
@@ -308,14 +308,13 @@ Until the accountant confirms commission, taxes, freight, evaporation/loss treat
 
 **Recovery:** Setup saves step-by-step. Imported opening balances remain drafts until the owner confirms them. Failed CSV rows are reported individually and valid rows are not silently discarded.
 
-### Flow B — Sign-in and session recovery
+### Flow B — Open the owner workspace
 
-1. Owner signs in using email/phone and password or a secure passwordless option selected during implementation.
-2. The owner lands on the single outlet dashboard.
-3. If the session expires while entering data, the local draft remains safely contained in the app store and submission resumes after sign-in.
-4. Password/session recovery verifies ownership before restoring access.
+1. The owner opens the application directly on the controlled device or private network.
+2. The application connects to MongoDB and lands on the operations dashboard.
+3. The owner enters and reviews every operational record manually; there is no email, password, sign-in, or session recovery flow in v1.
 
-**Failure states:** Wrong credential, locked account, recovery failure, offline with no previously valid session, and expired session each get a specific action instead of a generic error.
+**Failure states:** MongoDB unavailable, network unavailable, or stale data each receive a clear retry action and never masquerade as an authentication error.
 
 ### Flow C — Open a shift
 
@@ -487,7 +486,6 @@ The design phase should produce a linked prototype and review images at desktop 
 
 | Area | Screens / states to design |
 |---|---|
-| Authentication | Owner sign in, forgot/recover, locked, session expired |
 | Onboarding | Outlet details, products, tanks, dispensers/nozzles, mappings, shifts, tenders, optional staff names, opening balances, readiness check |
 | Owner home | Healthy day, active warnings, no active shift, provisional data, loading/offline/error |
 | Shift list | Active/upcoming/closed/variance filters, empty state, overdue shift |
@@ -505,7 +503,7 @@ The design phase should produce a linked prototype and review images at desktop 
 | Reports | Catalog, filter builder, preview, export progress, empty/error |
 | Staff | Simple staff list, profile, shift participation, attendance note, activate/archive record; no login or role settings |
 | Changes/corrections | Change timeline, closed-record correction, impact preview, final confirmation, amended comparison |
-| Settings | Owner account, outlet, business day, thresholds, tenders, categories, evidence policy, backup/export status |
+| Settings | Operating model, business day, thresholds, tenders, categories, evidence policy, backup/export status |
 
 ### 6.4 Universal frontend state contract
 
@@ -516,7 +514,6 @@ Every data screen must intentionally implement:
 - No-results state for active filters.
 - Recoverable API error with retry.
 - Offline/stale state with last successful sync.
-- Signed-out/session-expired state without losing a local draft.
 - Record-locked state.
 - Optimistic-action pending state only where safe.
 - Version conflict state.
@@ -755,11 +752,6 @@ Use explicit commands for consequential transitions and ordinary query endpoints
 ### 10.1 Representative endpoints
 
 ```text
-POST   /owner/session
-DELETE /owner/session
-POST   /owner/recovery
-GET    /owner/profile
-
 GET    /outlet/readiness
 POST   /outlet/opening-balances/submit
 
@@ -945,11 +937,11 @@ The durations below assume roughly one product/design owner, two full-stack engi
 
 ### Phase 2 — Engineering foundation and outlet setup (1 week)
 
-- Repository foundation, CI, environments, single-owner authentication, change-history foundation, object storage, health/observability.
+- Repository foundation, CI, environments, MongoDB configuration, change-history foundation, object storage, health/observability.
 - Equipment, shifts, payment/category settings, staff, and opening balance workflow.
-- Automated session-security and transaction test harness.
+- Automated transaction, idempotency, and data-integrity test harness.
 
-**Gate:** A seeded outlet passes readiness checks; session tests, change history, CI, and restore procedure exist.
+**Gate:** Seeded operations pass readiness checks; transaction tests, change history, CI, and restore procedure exist.
 
 ### Phase 3 — Shift ledger and field capture (2 weeks)
 
@@ -1000,10 +992,10 @@ The durations below assume roughly one product/design owner, two full-stack engi
 A feature is complete only when:
 
 - Product behavior matches approved acceptance criteria.
-- Happy path, empty, validation, signed-out/session-expired, server error, offline, retry, conflict, and locked states are handled where applicable.
+- Happy path, empty, validation, server error, offline, retry, conflict, and locked states are handled where applicable.
 - Canonical calculations are server-side and covered by exact expected-value tests.
 - Consequential mutation is idempotent and recorded in change history.
-- The owner session is required and browser-supplied outlet identifiers cannot escape the configured outlet.
+- The owner-controlled workspace does not accept browser-supplied tenant or identity identifiers.
 - Mobile 390 px, tablet, and desktop layouts are reviewed.
 - Keyboard/screen-reader basics and contrast pass.
 - Logs, metrics, and an operational recovery action exist.

@@ -26,7 +26,7 @@ function isCurrent(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
-export function AppShell({ children, outletName, ownerName }: { children: ReactNode; outletName: string; ownerName: string }) {
+export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   return (
@@ -61,11 +61,11 @@ export function AppShell({ children, outletName, ownerName }: { children: ReactN
         <div className="sidebar-foot">
           <div className="outlet-chip">
             <span className="outlet-dot" />
-            <span><strong>{outletName}</strong><small>Outlet is live</small></span>
+            <span><strong>Operations storage</strong><small>Records are live</small></span>
           </div>
           <Link className="owner-chip" href="/settings">
-            <span className="avatar">{ownerName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
-            <span><strong>{ownerName}</strong><small>Owner</small></span>
+            <span className="avatar">OW</span>
+            <span><strong>Owner workspace</strong><small>Manual operations</small></span>
           </Link>
         </div>
       </aside>

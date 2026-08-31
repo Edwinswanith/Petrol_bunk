@@ -19,7 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html data-scroll-behavior="smooth" lang="en">
       <body>
-        <AppShell outletName={process.env.OUTLET_NAME ?? "Swanith Fuels"} ownerName={process.env.OWNER_NAME ?? "Edwin Swanith"}>{children}</AppShell>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

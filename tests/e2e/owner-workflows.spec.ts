@@ -4,6 +4,9 @@ test("owner can move through the core operating views", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: /good (morning|afternoon|evening)/i })).toBeVisible();
+  await expect(page.getByText("Enter and review today’s forecourt operations.")).toBeVisible();
+  await expect(page.getByText("Owner workspace")).toHaveCount(1);
+  await expect(page.getByText("Swanith Fuels")).toHaveCount(0);
   await expect(page.getByText("₹5,42,850")).toBeVisible();
 
   await page.getByRole("link", { name: "Stock" }).first().click();

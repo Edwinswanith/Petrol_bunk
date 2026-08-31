@@ -38,8 +38,8 @@ export function OwnerDashboard({ dashboard }: { dashboard: DashboardViewModel })
       <div className="dashboard-topline reveal reveal-1">
         <div className="dashboard-heading">
           <p className="eyebrow">{dashboard.businessDateLabel}</p>
-          <h1>{dashboard.greeting}, <em>{dashboard.ownerName}</em></h1>
-          <p className="page-description">Here is the live position of {dashboard.outletName}.</p>
+          <h1>{dashboard.greeting}</h1>
+          <p className="page-description">Enter and review today’s forecourt operations.</p>
         </div>
         <div className="live-stamp">
           <span className="status-pill live">{dashboard.dataStatus}</span>

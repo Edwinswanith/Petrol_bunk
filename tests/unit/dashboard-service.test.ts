@@ -59,6 +59,8 @@ describe("buildDashboardViewModel", () => {
     expect(dashboard.fuelSold.map((item) => item.litres)).toEqual(["100 L", "100 L"]);
     expect(dashboard.currentShift).toBeNull();
     expect(dashboard.dataStatus).toBe("CLOSED");
+    expect(dashboard).not.toHaveProperty("ownerName");
+    expect(dashboard).not.toHaveProperty("outletName");
   });
 
   it("uses the active shift as the latest recorded tank position", () => {

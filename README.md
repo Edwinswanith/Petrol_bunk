@@ -50,14 +50,14 @@ Copy the environment template:
 cp .env.example .env.local
 ```
 
-Configure at least:
+Configure MongoDB:
 
 ```dotenv
 MONGODB_URI=mongodb+srv://...
 MONGODB_DB=forecourt
-OWNER_NAME=Edwin
-OUTLET_NAME=Swanith Fuels
 ```
+
+No owner name, outlet name, email, or session secret is required. The owner uses the workspace directly and enters all operational information manually.
 
 Use a MongoDB deployment that supports transactions so shift opening and closing remain atomic.
 
@@ -94,7 +94,7 @@ npm run build
 
 Current verification baseline:
 
-- 29 unit, component, and integration tests
+- 30 unit, component, and integration tests
 - 10 desktop/mobile end-to-end journeys
 - 98.95% line coverage across the critical calculation and workflow layer
 - Production build, TypeScript, ESLint, dependency audit, and secret scan passing
@@ -108,7 +108,7 @@ The runtime health endpoint is `GET /api/health`.
 - There are no staff accounts, roles, approvals, invitations, or staff-facing screens; the owner records all activity.
 - Closed shifts are immutable in v1.
 - Packaged-goods stock is an owner reference list rather than a transactional inventory ledger.
-- Local review mode has no authentication. Add the owner session/recovery gate and deployment secrets before public exposure.
+- The workspace has no authentication or user sessions in v1. Keep it on a trusted owner-controlled device or private network rather than exposing it publicly.
 - Outlet prices, cost basis, tank calibration, density tolerances, OMC procedures, and the hosting target require production confirmation.
 
 See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for the complete product, UX, engineering, pilot, and production-readiness roadmap.

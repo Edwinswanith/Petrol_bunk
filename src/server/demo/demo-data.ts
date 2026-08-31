@@ -2,8 +2,6 @@ import type { DashboardViewModel } from "@/contracts/dashboard";
 
 export const demoDashboard: DashboardViewModel = {
   greeting: "Good evening",
-  ownerName: "Edwin",
-  outletName: "Swanith Fuels",
   businessDateLabel: "Monday, 31 August",
   lastUpdatedLabel: "Updated just now",
   dataStatus: "LIVE",

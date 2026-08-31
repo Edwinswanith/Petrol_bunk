@@ -104,8 +104,6 @@ export function buildDashboardViewModel(input: {
 
   return {
     greeting: greetingForBusinessTime(now),
-    ownerName: process.env.OWNER_NAME ?? "Edwin",
-    outletName: process.env.OUTLET_NAME ?? "Swanith Fuels",
     businessDateLabel: businessDateLabel(now),
     lastUpdatedLabel: "Updated just now",
     dataStatus: active ? "LIVE" : "CLOSED",

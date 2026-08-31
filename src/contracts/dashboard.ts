@@ -26,8 +26,6 @@ export type DashboardAlert = {
 
 export type DashboardViewModel = {
   greeting: string;
-  ownerName: string;
-  outletName: string;
   businessDateLabel: string;
   lastUpdatedLabel: string;
   dataStatus: "LIVE" | "CLOSED";
