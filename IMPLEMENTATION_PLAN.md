@@ -10,7 +10,7 @@
 
 ## Current v1 build slice
 
-The first implementation deliberately uses the simplified model chosen after the original planning conversation: one owner, one outlet, one active shift, one petrol nozzle/tank, and one diesel nozzle/tank. It includes shift opening and immutable closing, test-fuel handling, fuel receipts, expenses, density/water checks, deterministic reconciliation, live owner views, and a daily CSV export.
+The first implementation deliberately uses the simplified model chosen after the original planning conversation: one owner, one outlet, one active shift, one petrol nozzle/tank, and one diesel nozzle/tank. It includes staff records, daily attendance, one operator-to-machine allocation per shift, totalizer-based operator performance and handover variance, shift opening and immutable closing, test-fuel handling, fuel receipts, expenses, density/water checks, deterministic reconciliation, live owner views, and a daily CSV export.
 
 To keep this first release honest and small, it does not yet include closed-record corrections, transactional packaged-goods inventory, attachments/offline drafts, configurable multi-nozzle equipment, or public-deployment authentication. Those remain later production-pilot work in the sections below. Local review mode uses seeded in-memory data; MongoDB enables persistence.
 
@@ -85,7 +85,7 @@ This is consistent with the [HPCL Marketing Discipline Guidelines 2024](https://
 
 **P1 — high-value follow-up after a stable pilot**
 
-- Staff attendance/late-arrival capture and a richer operational performance view.
+- Mid-shift machine reassignment, shared-nozzle splits, and richer coaching trends beyond the current attendance, litres, expected sales, and handover-variance view.
 - Credit-customer account, limit, invoice, payment, and ageing workflow.
 - Scheduled owner notifications through approved channels.
 - Barcode-assisted packaged inventory.

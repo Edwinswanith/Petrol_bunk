@@ -29,6 +29,17 @@ export function businessTimeLabel(isoTimestamp: string): string {
   }).format(new Date(isoTimestamp));
 }
 
+export function businessTime(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BUSINESS_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${part("hour")}:${part("minute")}`;
+}
+
 export function greetingForBusinessTime(now: Date = new Date()): string {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {

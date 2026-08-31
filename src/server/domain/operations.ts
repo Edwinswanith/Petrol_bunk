@@ -7,10 +7,17 @@ import type {
 
 export type ShiftState = "OPEN" | "CLOSED";
 
+export type StaffAssignment = {
+  staffId: string;
+  staffName: string;
+  nozzleId: string;
+};
+
 export type OpenShiftInput = {
   name: string;
   businessDate: string;
   staffOnDuty: string[];
+  staffAssignments?: StaffAssignment[];
   openingNozzleReadings: Record<string, string>;
   openingTankStocks: Record<string, string>;
 };
@@ -34,6 +41,7 @@ export type CloseShiftInput = {
   lubricantRevenue: string;
   lubricantCost: string;
   expenses: string;
+  staffHandovers?: Record<string, string>;
   varianceExplanation?: string;
 };
 
@@ -45,6 +53,19 @@ export type ShiftReconciliation = {
   nozzles: Record<string, NozzleResult>;
   tanks: Record<string, TankResult>;
   sales: SalesResult;
+  staff?: Array<{
+    staffId: string;
+    staffName: string;
+    nozzleId: string;
+    machineLabel: string;
+    product: string;
+    openingReading: string;
+    closingReading: string;
+    litresSold: string;
+    expectedSalesValue: string;
+    declaredHandover: string;
+    handoverVariance: string;
+  }>;
   grossMargin: string;
   estimatedOperatingProfit: string;
 };

@@ -1,6 +1,6 @@
 # Forecourt
 
-Forecourt is a responsive, single-owner petrol pump operations system. It connects shift readings, fuel receipts, tank reconciliation, collections, cash, expenses, quality checks, margin estimates, and daily reporting in one calm operating workspace.
+Forecourt is a responsive, single-owner petrol pump operations system. It connects attendance, staff-to-machine allocation, shift totalizers, fuel receipts, tank reconciliation, collections, expenses, quality checks, staff performance, and daily reporting in one calm operating workspace.
 
 ## Product preview
 
@@ -15,11 +15,14 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 ## What works
 
 - Open one active shift with protected nozzle totalizers and physical tank stock.
+- Maintain a staff directory and daily present, late, absent, or leave register with check-in and check-out times.
+- Assign one operator to each petrol or diesel machine when the shift opens; assigned operators are marked present automatically.
 - Record fuel deliveries, accepted quantities, density evidence, water dips, and expenses.
 - Capture returned or non-returned test fuel during shift close.
 - Reconcile nozzle sales, physical tank stock, tender totals, cash handover, fuel cost, gross margin, and estimated operating profit with decimal-safe server calculations.
 - Include linked fuel receipts and cash/non-cash expenses automatically in the active shift reconciliation.
 - Preview every reconciliation before an idempotent, immutable close.
+- Calculate litres sold, expected sales value, declared handover, and handover variance for every assigned operator.
 - Review live owner dashboards for sales, margin, expenses, fuel stock, throughput, payment mix, and exceptions.
 - Export a spreadsheet-safe daily CSV containing summaries, shifts, variances, expenses, and fuel receipts.
 - Operate across desktop and mobile layouts without staff accounts, role management, or approval queues.
@@ -60,12 +63,13 @@ Use a MongoDB deployment that supports transactions so shift opening and closing
 
 ## Owner workflow
 
-1. Open the shift with nozzle totalizers, tank stock, and optional staff names.
-2. Record deliveries, density/water checks, and expenses during the shift.
-3. Enter closing totalizers, physical stock, test fuel, tender totals, and declared cash.
-4. Review the server-calculated fuel, tank, tender, cash, and margin position.
-5. Close and lock the shift. Replaying the same command returns the canonical result instead of duplicating it.
-6. Review the dashboard or download the daily operations CSV from Reports.
+1. Add staff and record attendance from **Staff & attendance**.
+2. Open the shift, allocate one operator to each machine, and record nozzle totalizers and tank stock.
+3. Record deliveries, density/water checks, and expenses during the shift.
+4. Enter closing totalizers, physical stock, test fuel, tender totals, operator handovers, and declared cash.
+5. Review the server-calculated fuel, tank, tender, cash, operator, and margin position.
+6. Close and lock the shift. The assigned attendance records receive their check-out time automatically.
+7. Review operator litres and handover accuracy, or download the daily operations CSV from Reports.
 
 ## Technology
 
@@ -90,9 +94,9 @@ npm run build
 
 Current verification baseline:
 
-- 24 unit, component, and integration tests
+- 29 unit, component, and integration tests
 - 10 desktop/mobile end-to-end journeys
-- 98.37% line coverage across the critical calculation and workflow layer
+- 98.95% line coverage across the critical calculation and workflow layer
 - Production build, TypeScript, ESLint, dependency audit, and secret scan passing
 
 The runtime health endpoint is `GET /api/health`.
@@ -100,7 +104,8 @@ The runtime health endpoint is `GET /api/health`.
 ## v1 boundaries
 
 - One owner, one outlet, one active shift, one petrol nozzle/tank, and one diesel nozzle/tank.
-- Staff names are operational notes only; there are no staff accounts, roles, approvals, or invitations.
+- One operator is assigned to one machine for the full shift in v1. Mid-shift reassignment and shared-nozzle splits are deferred.
+- There are no staff accounts, roles, approvals, invitations, or staff-facing screens; the owner records all activity.
 - Closed shifts are immutable in v1.
 - Packaged-goods stock is an owner reference list rather than a transactional inventory ledger.
 - Local review mode has no authentication. Add the owner session/recovery gate and deployment secrets before public exposure.

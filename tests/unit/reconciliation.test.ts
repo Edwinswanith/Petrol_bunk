@@ -7,6 +7,8 @@ import {
   calculatePaymentReconciliation,
   calculateTankReconciliation
 } from "@/server/calculations/reconciliation";
+import type { CloseShiftInput, ShiftRecord } from "@/server/domain/operations";
+import { reconcileShift } from "@/server/services/shift-reconciliation-service";
 
 describe("calculateNozzleSales", () => {
   it("calculates metered volume and revenue across price segments", () => {
@@ -203,5 +205,69 @@ describe("calculateManagementProfit", () => {
       grossMargin: "35770.00",
       estimatedOperatingProfit: "29420.00"
     });
+  });
+});
+
+describe("staff machine reconciliation", () => {
+  it("attributes nozzle litres, expected collection and handover variance to the assigned staff", () => {
+    const shift: ShiftRecord = {
+      id: "shift-1",
+      state: "OPEN",
+      name: "Morning shift",
+      businessDate: "2026-08-31",
+      staffOnDuty: ["Arun", "Priya"],
+      staffAssignments: [
+        { staffId: "staff-arun", staffName: "Arun", nozzleId: "petrol_1" },
+        { staffId: "staff-priya", staffName: "Priya", nozzleId: "diesel_1" }
+      ],
+      openingNozzleReadings: { petrol_1: "1000", diesel_1: "2000" },
+      openingTankStocks: { petrol_tank: "5000", diesel_tank: "5000" },
+      createdAt: "2026-08-31T03:30:00.000Z",
+      startedAt: "2026-08-31T03:30:00.000Z",
+      version: 1
+    };
+    const input: CloseShiftInput = {
+      closingNozzleReadings: { petrol_1: "1100", diesel_1: "2050" },
+      closingTankStocks: { petrol_tank: "4905", diesel_tank: "4950" },
+      nonSaleDispenses: [{ nozzleId: "petrol_1", volume: "5", returnedToTank: true }],
+      receipts: { petrol_tank: "0", diesel_tank: "0" },
+      payments: {
+        cashSales: "14762.50", upi: "0", card: "0", credit: "0", other: "0",
+        cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "14762.50"
+      },
+      staffHandovers: { "staff-arun": "9700", "staff-priya": "5025" },
+      lubricantRevenue: "0",
+      lubricantCost: "0",
+      expenses: "0"
+    };
+
+    expect(reconcileShift(shift, input).staff).toEqual([
+      {
+        staffId: "staff-arun",
+        staffName: "Arun",
+        nozzleId: "petrol_1",
+        machineLabel: "Petrol machine P1",
+        product: "Petrol",
+        openingReading: "1000",
+        closingReading: "1100",
+        litresSold: "95.000",
+        expectedSalesValue: "9737.50",
+        declaredHandover: "9700.00",
+        handoverVariance: "-37.50"
+      },
+      {
+        staffId: "staff-priya",
+        staffName: "Priya",
+        nozzleId: "diesel_1",
+        machineLabel: "Diesel machine D1",
+        product: "Diesel",
+        openingReading: "2000",
+        closingReading: "2050",
+        litresSold: "50.000",
+        expectedSalesValue: "5025.00",
+        declaredHandover: "5025.00",
+        handoverVariance: "0.00"
+      }
+    ]);
   });
 });

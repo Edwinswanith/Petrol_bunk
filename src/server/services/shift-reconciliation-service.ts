@@ -14,13 +14,15 @@ import type {
 
 type NozzleConfig = {
   tankId: string;
+  machineLabel: string;
+  product: string;
   pricePerLitre: string;
   costPerLitre: string;
 };
 
 export const demoNozzleConfig: Record<string, NozzleConfig> = {
-  petrol_1: { tankId: "petrol_tank", pricePerLitre: "102.50", costPerLitre: "96.80" },
-  diesel_1: { tankId: "diesel_tank", pricePerLitre: "100.50", costPerLitre: "94.40" }
+  petrol_1: { tankId: "petrol_tank", machineLabel: "Petrol machine P1", product: "Petrol", pricePerLitre: "102.50", costPerLitre: "96.80" },
+  diesel_1: { tankId: "diesel_tank", machineLabel: "Diesel machine D1", product: "Diesel", pricePerLitre: "100.50", costPerLitre: "94.40" }
 };
 
 export function reconcileShift(
@@ -85,10 +87,32 @@ export function reconcileShift(
     expenses: input.expenses
   });
 
+  const staff = (shift.staffAssignments ?? []).map((assignment) => {
+    const nozzle = nozzleResults[assignment.nozzleId];
+    const config = nozzleConfig[assignment.nozzleId];
+    if (!nozzle || !config) throw new Error(`Unknown assigned nozzle: ${assignment.nozzleId}`);
+    const declared = new Decimal(input.staffHandovers?.[assignment.staffId] ?? "0");
+    const expected = new Decimal(nozzle.revenue);
+    return {
+      staffId: assignment.staffId,
+      staffName: assignment.staffName,
+      nozzleId: assignment.nozzleId,
+      machineLabel: config.machineLabel,
+      product: config.product,
+      openingReading: shift.openingNozzleReadings[assignment.nozzleId],
+      closingReading: input.closingNozzleReadings[assignment.nozzleId],
+      litresSold: nozzle.customerSalesVolume,
+      expectedSalesValue: expected.toDecimalPlaces(2).toFixed(2),
+      declaredHandover: declared.toDecimalPlaces(2).toFixed(2),
+      handoverVariance: declared.minus(expected).toDecimalPlaces(2).toFixed(2)
+    };
+  });
+
   return {
     nozzles: nozzleResults,
     tanks: tankResults,
     sales,
+    staff,
     ...profit
   };
 }

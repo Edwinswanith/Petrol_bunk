@@ -31,7 +31,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ id: stri
           {isClosed ? (
             <div className="success-message"><Clock3 size={20} /><span><strong>This shift is locked</strong><span>Closed shifts are immutable in this first version, so the original reading remains protected.</span></span></div>
           ) : (
-            <ShiftCloseForm shiftId={shift.id} defaults={{ petrolClosing: shift.openingNozzleReadings.petrol_1, dieselClosing: shift.openingNozzleReadings.diesel_1, petrolStock: shift.openingTankStocks.petrol_tank, dieselStock: shift.openingTankStocks.diesel_tank, cashSales: "0", upi: "0" }} />
+            <ShiftCloseForm shiftId={shift.id} assignments={shift.staffAssignments} defaults={{ petrolClosing: shift.openingNozzleReadings.petrol_1, dieselClosing: shift.openingNozzleReadings.diesel_1, petrolStock: shift.openingTankStocks.petrol_tank, dieselStock: shift.openingTankStocks.diesel_tank, cashSales: "0", upi: "0" }} />
           )}
           {isClosed && shift.reconciliation ? (
             <div className="closed-summary" aria-label="Closed shift reconciliation">
@@ -42,6 +42,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ id: stri
               <div><span>Est. operating profit</span><strong>₹{Number(shift.reconciliation.estimatedOperatingProfit).toLocaleString("en-IN")}</strong></div>
             </div>
           ) : null}
+          {isClosed && shift.reconciliation?.staff?.length ? <div className="shift-staff-results">{shift.reconciliation.staff.map((result) => <article key={result.staffId}><span className="machine-code">{result.nozzleId === "petrol_1" ? "P1" : "D1"}</span><div><strong>{result.staffName}</strong><small>{result.litresSold} L · ₹{Number(result.expectedSalesValue).toLocaleString("en-IN")}</small></div><div><small>Handover variance</small><strong>₹{Number(result.handoverVariance).toLocaleString("en-IN")}</strong></div></article>)}</div> : null}
         </section>
         <aside className="dashboard-main">
           <section className="panel panel-pad"><div className="panel-header"><div><p className="panel-kicker">Opening snapshot</p><h2 className="panel-title">Recorded checks</h2></div></div><div className="alert-list"><div className="alert-card"><span className="alert-icon"><Fuel size={15} /></span><span><strong>Nozzle readings</strong><span>2 of 2 opening totalizers recorded</span></span><CircleCheckIcon /></div><div className="alert-card"><span className="alert-icon"><UsersRound size={15} /></span><span><strong>Staff on duty</strong><span>{shift.staffOnDuty.join(", ") || "No names recorded"}</span></span><CircleCheckIcon /></div></div></section>

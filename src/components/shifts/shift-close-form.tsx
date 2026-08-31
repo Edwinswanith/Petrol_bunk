@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Gauge, LockKeyhole } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
+import type { StaffAssignment } from "@/server/domain/operations";
 
 type ReconciliationPreview = {
   sales: {
@@ -14,6 +15,7 @@ type ReconciliationPreview = {
   tanks: Record<string, { variance: string; variancePercent: string }>;
   grossMargin: string;
   estimatedOperatingProfit: string;
+  staff: Array<{ staffId: string; staffName: string; machineLabel: string; litresSold: string; expectedSalesValue: string; declaredHandover: string; handoverVariance: string }>;
 };
 
 type Defaults = {
@@ -37,7 +39,7 @@ function optionalText(form: FormData, name: string) {
   return String(form.get(name) ?? "").trim();
 }
 
-export function ShiftCloseForm({ shiftId, defaults }: { shiftId: string; defaults: Defaults }) {
+export function ShiftCloseForm({ shiftId, defaults, assignments = [] }: { shiftId: string; defaults: Defaults; assignments?: StaffAssignment[] }) {
   const [preview, setPreview] = useState<ReconciliationPreview | null>(null);
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
@@ -80,6 +82,7 @@ export function ShiftCloseForm({ shiftId, defaults }: { shiftId: string; default
       lubricantRevenue: formValue(data, "lubricantRevenue"),
       lubricantCost: formValue(data, "lubricantCost"),
       expenses: "0",
+      staffHandovers: Object.fromEntries(assignments.map((assignment) => [assignment.staffId, formValue(data, `handover-${assignment.staffId}`)])),
       varianceExplanation: optionalText(data, "varianceExplanation")
     };
 
@@ -170,6 +173,15 @@ export function ShiftCloseForm({ shiftId, defaults }: { shiftId: string; default
         </div>
       </section>
 
+      {assignments.length ? <section className="form-section">
+        <div className="form-section-heading"><span className="step-number">4</span><div><h2>Operator handovers</h2><p>Record the total sales value each assigned operator declares for their machine.</p></div></div>
+        <div className="handover-grid">{assignments.map((assignment) => <label className="handover-card" key={assignment.staffId}>
+          <span className={`machine-code ${assignment.nozzleId.startsWith("diesel") ? "diesel" : ""}`}>{assignment.nozzleId === "petrol_1" ? "P1" : "D1"}</span>
+          <span><strong>{assignment.staffName}</strong><small>{assignment.nozzleId === "petrol_1" ? "Petrol machine" : "Diesel machine"}</small></span>
+          <span className="input-wrap"><input aria-label={`${assignment.staffName} declared handover`} defaultValue="0" min="0" name={`handover-${assignment.staffId}`} required step="0.01" type="number" /><span className="unit">₹</span></span>
+        </label>)}</div>
+      </section> : null}
+
       {error ? <p className="form-error" role="alert"><AlertTriangle aria-hidden="true" size={15} /> {error}</p> : null}
 
       {preview ? (
@@ -183,6 +195,7 @@ export function ShiftCloseForm({ shiftId, defaults }: { shiftId: string; default
             <div><span>Cash handover</span><strong>{preview.sales.cashVariance === "0.00" ? "Cash matches" : `${inr(preview.sales.cashVariance)} variance`}</strong></div>
             <div><span>Est. operating profit</span><strong className="mono">{inr(preview.estimatedOperatingProfit)}</strong></div>
           </div>
+          {preview.staff?.length ? <div className="staff-preview-list">{preview.staff.map((result) => <div className="staff-preview-row" key={result.staffId}><span><strong>{result.staffName}</strong><small>{result.machineLabel} · {result.litresSold} L</small></span><span><small>Expected</small><strong>{inr(result.expectedSalesValue)}</strong></span><span><small>Handover variance</small><strong>{inr(result.handoverVariance)}</strong></span></div>)}</div> : null}
         </section>
       ) : null}
 

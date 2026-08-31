@@ -14,12 +14,15 @@ test("owner can move through the core operating views", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /money & margin/i })).toBeVisible();
 });
 
-test("owner can review a shift reconciliation", async ({ page }) => {
-  await page.goto("/shifts/shift-live-001");
+test("owner can review a shift reconciliation", async ({ page, request }) => {
+  const shifts = await (await request.get("/api/shifts")).json();
+  const active = shifts.find((shift: { state: string }) => shift.state === "OPEN");
+  expect(active).toBeTruthy();
+  await page.goto(`/shifts/${active.id}`);
 
   await expect(page.getByRole("heading", { name: "Evening shift" })).toBeVisible();
-  await page.getByLabel(/petrol closing meter/i).fill("183340.000");
-  await page.getByLabel(/diesel closing meter/i).fill("92197.015");
+  await page.getByLabel(/petrol closing meter/i).fill((Number(active.openingNozzleReadings.petrol_1) + 100).toFixed(3));
+  await page.getByLabel(/diesel closing meter/i).fill((Number(active.openingNozzleReadings.diesel_1) + 100).toFixed(3));
   await page.getByLabel(/cash sales/i).fill("10000");
   await page.locator('input[name="upi"]').fill("10300");
   await page.getByLabel(/declared cash handover/i).fill("10000");
@@ -63,7 +66,9 @@ test("owner can record receipt and quality evidence", async ({ page }) => {
 test("health and daily export are available", async ({ page, request }) => {
   const health = await request.get("/api/health");
   expect(health.ok()).toBeTruthy();
-  await expect(health.json()).resolves.toMatchObject({ status: "ok", storage: "memory-demo" });
+  const healthBody = await health.json();
+  expect(healthBody.status).toBe("ok");
+  expect(["memory-demo", "mongodb"]).toContain(healthBody.storage);
 
   await page.goto("/reports");
   const downloadPromise = page.waitForEvent("download");
