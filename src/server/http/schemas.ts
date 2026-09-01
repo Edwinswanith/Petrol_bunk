@@ -28,6 +28,9 @@ export const closeShiftSchema = z.object({
   lubricantCost: decimal,
   expenses: decimal,
   staffHandovers: z.record(z.string(), decimal).optional(),
+  sideCollections: z.record(z.string(), z.object({
+    cash: decimal, upi: decimal, card: decimal, credit: decimal, other: decimal, declaredCashHandover: decimal
+  })).optional(),
   varianceExplanation: z.string().max(1000).optional()
 });
 
@@ -93,10 +96,11 @@ export const fuelProductSchema = z.object({
   code: z.string().trim().min(1).max(20),
   name: z.string().trim().min(2).max(80),
   sellingPricePerLitre: decimal,
-  costPricePerLitre: decimal
+  costPricePerLitre: decimal,
+  marketReferencePrice: decimal.optional()
 });
 
-export const fuelPriceSchema = fuelProductSchema.pick({ sellingPricePerLitre: true, costPricePerLitre: true });
+export const fuelPriceSchema = fuelProductSchema.pick({ sellingPricePerLitre: true, costPricePerLitre: true, marketReferencePrice: true });
 
 export const fuelTankSchema = z.object({
   code: z.string().trim().min(1).max(20),

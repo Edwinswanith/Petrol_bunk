@@ -20,9 +20,9 @@ describe("OwnerDashboard", () => {
   it("exposes the primary owner actions as links", () => {
     render(<OwnerDashboard dashboard={demoDashboard} />);
 
-    expect(screen.getByRole("link", { name: /continue shift/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /continue today’s sheet/i })).toHaveAttribute(
       "href",
-      "/shifts/shift-live-001"
+      "/day"
     );
     expect(screen.getByRole("link", { name: /record expense/i })).toHaveAttribute(
       "href",

@@ -4,6 +4,7 @@ export type FuelProduct = {
   name: string;
   sellingPricePerLitre: string;
   costPricePerLitre: string;
+  marketReferencePrice?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +29,12 @@ export type FuelStation = {
   productId: string;
   tankId: string;
   totalizerPrecision: number;
+  dispenserId?: string;
+  dispenserCode?: string;
+  sideId?: string;
+  sideLabel?: string;
+  nozzleNumber?: number;
+  displayOrder?: number;
   active: boolean;
   createdAt: string;
   updatedAt: string;

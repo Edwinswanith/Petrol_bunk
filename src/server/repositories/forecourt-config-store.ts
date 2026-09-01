@@ -3,10 +3,10 @@ import { MongoServerError } from "mongodb";
 import { getMongoDatabase, hasMongoConfiguration } from "@/server/db/mongo-client";
 import type { ForecourtConfiguration, FuelProduct, FuelStation, FuelTank } from "@/server/domain/forecourt";
 
-type CreateProductInput = Pick<FuelProduct, "code" | "name" | "sellingPricePerLitre" | "costPricePerLitre">;
+type CreateProductInput = Pick<FuelProduct, "code" | "name" | "sellingPricePerLitre" | "costPricePerLitre"> & Partial<Pick<FuelProduct, "marketReferencePrice">>;
 type CreateTankInput = Pick<FuelTank, "code" | "name" | "productId" | "capacityLitres" | "currentStock">;
-type CreateStationInput = Pick<FuelStation, "code" | "name" | "productId" | "tankId" | "totalizerPrecision">;
-type UpdatePriceInput = Pick<FuelProduct, "sellingPricePerLitre" | "costPricePerLitre">;
+type CreateStationInput = Pick<FuelStation, "code" | "name" | "productId" | "tankId" | "totalizerPrecision"> & Partial<Pick<FuelStation, "dispenserId" | "dispenserCode" | "sideId" | "sideLabel" | "nozzleNumber" | "displayOrder">>;
+type UpdatePriceInput = Pick<FuelProduct, "sellingPricePerLitre" | "costPricePerLitre"> & Partial<Pick<FuelProduct, "marketReferencePrice">>;
 
 export interface ForecourtConfigStore {
   getConfiguration(): Promise<ForecourtConfiguration>;
@@ -18,17 +18,29 @@ export interface ForecourtConfigStore {
 }
 
 const defaultProducts: FuelProduct[] = [
-  { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80", active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" },
-  { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40", active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" }
+  { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80", marketReferencePrice: "102.50", active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" },
+  { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40", marketReferencePrice: "100.50", active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" }
 ];
 const defaultTanks: FuelTank[] = [
   { id: "petrol_tank", code: "PT1", name: "Petrol Tank 1", productId: "petrol", capacityLitres: "20000", currentStock: "12460", active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" },
   { id: "diesel_tank", code: "DT1", name: "Diesel Tank 1", productId: "diesel", capacityLitres: "20000", currentStock: "9002.985", active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" }
 ];
+const layoutDate = "2026-09-01T00:00:00.000Z";
 const defaultStations: FuelStation[] = [
-  { id: "petrol_1", code: "P1", name: "Petrol station P1", productId: "petrol", tankId: "petrol_tank", totalizerPrecision: 3, active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" },
-  { id: "diesel_1", code: "D1", name: "Diesel station D1", productId: "diesel", tankId: "diesel_tank", totalizerPrecision: 3, active: true, createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z" }
-];
+  ["a_n1", "A-N1", 1, "pump-a", "A", "A-S1", "Side 1", "petrol", "petrol_tank"],
+  ["a_n2", "A-N2", 2, "pump-a", "A", "A-S2", "Side 2", "petrol", "petrol_tank"],
+  ["a_n3", "A-N3", 3, "pump-a", "A", "A-S1", "Side 1", "diesel", "diesel_tank"],
+  ["a_n4", "A-N4", 4, "pump-a", "A", "A-S2", "Side 2", "diesel", "diesel_tank"],
+  ["b_n1", "B-N1", 1, "pump-b", "B", "B-S1", "Side 1", "petrol", "petrol_tank"],
+  ["b_n2", "B-N2", 2, "pump-b", "B", "B-S2", "Side 2", "petrol", "petrol_tank"],
+  ["b_n3", "B-N3", 3, "pump-b", "B", "B-S1", "Side 1", "diesel", "diesel_tank"],
+  ["b_n4", "B-N4", 4, "pump-b", "B", "B-S2", "Side 2", "diesel", "diesel_tank"]
+].map(([id, code, nozzleNumber, dispenserId, dispenserCode, sideId, sideLabel, productId, tankId], displayOrder) => ({
+  id: String(id), code: String(code), name: `Pump ${dispenserCode} nozzle ${nozzleNumber}`,
+  productId: String(productId), tankId: String(tankId), totalizerPrecision: 3,
+  dispenserId: String(dispenserId), dispenserCode: String(dispenserCode), sideId: String(sideId), sideLabel: String(sideLabel),
+  nozzleNumber: Number(nozzleNumber), displayOrder: displayOrder + 1, active: true, createdAt: layoutDate, updatedAt: layoutDate
+}));
 
 function normalizeCode(code: string) {
   return code.trim().toUpperCase();
@@ -102,6 +114,7 @@ async function ensureMongoConfig() {
         database.collection<FuelStation>("fuelStations").createIndex({ code: 1 }, { unique: true }),
         ...defaultProducts.map((item) => database.collection<FuelProduct>("fuelProducts").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true })),
         ...defaultTanks.map((item) => database.collection<FuelTank>("fuelTanks").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true })),
+        database.collection<FuelStation>("fuelStations").updateMany({ id: { $in: ["petrol_1", "diesel_1"] } }, { $set: { active: false, updatedAt: layoutDate } }),
         ...defaultStations.map((item) => database.collection<FuelStation>("fuelStations").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true }))
       ]);
     })();
@@ -117,7 +130,7 @@ function createMongoForecourtConfigStore(): ForecourtConfigStore {
       const [products, tanks, stations] = await Promise.all([
         database.collection<FuelProduct>("fuelProducts").find({}, { projection: { _id: 0 } }).sort({ name: 1 }).toArray(),
         database.collection<FuelTank>("fuelTanks").find({}, { projection: { _id: 0 } }).sort({ name: 1 }).toArray(),
-        database.collection<FuelStation>("fuelStations").find({}, { projection: { _id: 0 } }).sort({ code: 1 }).toArray()
+        database.collection<FuelStation>("fuelStations").find({}, { projection: { _id: 0 } }).sort({ displayOrder: 1, code: 1 }).toArray()
       ]);
       return { products, tanks, stations };
     },

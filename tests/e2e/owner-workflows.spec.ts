@@ -81,7 +81,7 @@ test("health and daily export are available", async ({ page, request }) => {
 
   await page.goto("/reports");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("link", { name: /download csv/i }).click();
+  await page.getByRole("link", { name: /daily export/i }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^forecourt-\d{4}-\d{2}-\d{2}\.csv$/);
 });
@@ -96,6 +96,7 @@ test("owner can configure a custom product, tank and station", async ({ page }, 
   await productForm.getByLabel("Name").fill(`XP95 ${suffix}`);
   await productForm.getByLabel(/selling price/i).fill("110");
   await productForm.getByLabel(/cost price/i).fill("102");
+  await productForm.getByLabel(/market reference/i).fill("111");
   await productForm.getByRole("button", { name: /add product/i }).click();
   await expect(page.getByRole("option", { name: `XP95 ${suffix} · ₹110` })).toBeAttached();
 

@@ -23,6 +23,22 @@ export type StationSnapshot = {
   tankName: string;
   pricePerLitre: string;
   costPerLitre: string;
+  marketReferencePrice?: string;
+  dispenserId?: string;
+  dispenserCode?: string;
+  sideId?: string;
+  sideLabel?: string;
+  nozzleNumber?: number;
+  displayOrder?: number;
+};
+
+export type SideCollection = {
+  cash: string;
+  upi: string;
+  card: string;
+  credit: string;
+  other: string;
+  declaredCashHandover: string;
 };
 
 export type TankSnapshot = {
@@ -65,6 +81,7 @@ export type CloseShiftInput = {
   lubricantCost: string;
   expenses: string;
   staffHandovers?: Record<string, string>;
+  sideCollections?: Record<string, SideCollection>;
   varianceExplanation?: string;
 };
 
@@ -94,6 +111,26 @@ export type ShiftReconciliation = {
     productName: string;
     litresSold: string;
     revenue: string;
+  }>;
+  sides?: Array<{
+    sideId: string;
+    sideLabel: string;
+    dispenserId: string;
+    dispenserCode: string;
+    staffId: string;
+    staffName: string;
+    nozzleIds: string[];
+    litresSold: string;
+    expectedSalesValue: string;
+    cash: string;
+    upi: string;
+    card: string;
+    credit: string;
+    other: string;
+    accountedTender: string;
+    tenderVariance: string;
+    declaredCashHandover: string;
+    cashVariance: string;
   }>;
   grossMargin: string;
   estimatedOperatingProfit: string;

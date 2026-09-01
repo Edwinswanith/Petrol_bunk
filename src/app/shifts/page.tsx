@@ -16,7 +16,7 @@ export default async function ShiftsPage() {
   const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
   return (
     <main className="page">
-      <PageHeader eyebrow="Operations ledger" title="Shifts" description="One clean record for every opening, handover and close." action={{ label: "Open new shift", href: "/shifts/new", icon: <Plus size={16} /> }} />
+      <PageHeader eyebrow="Operations ledger" title="Shifts" description="One clean record for every opening, handover and close." action={{ label: "Open today’s sheet", href: "/day", icon: <Plus size={16} /> }} />
       <section className="summary-strip reveal reveal-2" aria-label="Shift summary">
         <div className="summary-cell"><span>Active now</span><strong>{shifts.filter((s) => s.state === "OPEN").length}</strong></div>
         <div className="summary-cell"><span>Closed today</span><strong>{todayShifts.filter((s) => s.state === "CLOSED").length}</strong></div>

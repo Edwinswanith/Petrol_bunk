@@ -7,8 +7,8 @@ import {
   calculatePaymentReconciliation,
   calculateTankReconciliation
 } from "@/server/calculations/reconciliation";
-import type { CloseShiftInput, ShiftRecord } from "@/server/domain/operations";
-import { reconcileShift } from "@/server/services/shift-reconciliation-service";
+import type { CloseShiftInput, ShiftRecord, ShiftReconciliation } from "@/server/domain/operations";
+import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
 
 describe("calculateNozzleSales", () => {
   it("calculates metered volume and revenue across price segments", () => {
@@ -209,6 +209,58 @@ describe("calculateManagementProfit", () => {
 });
 
 describe("staff machine reconciliation", () => {
+  it("reconciles collections for a pump side and attributes the result to its operator", () => {
+    const shift: ShiftRecord = {
+      id: "shift-pump-a", state: "OPEN", name: "Daily forecourt sheet", businessDate: "2026-09-01",
+      staffOnDuty: ["Edwin"],
+      staffAssignments: [
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n1" },
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n3" }
+      ],
+      stationSnapshots: [
+        { stationId: "a_n1", code: "A-N1", name: "Pump A nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "102.50", costPerLitre: "96.80", dispenserId: "pump-a", dispenserCode: "A", sideId: "A-S1", sideLabel: "Side 1", nozzleNumber: 1, displayOrder: 1 },
+        { stationId: "a_n3", code: "A-N3", name: "Pump A nozzle 3", productId: "diesel", productName: "Diesel", tankId: "diesel_tank", tankName: "Diesel Tank", pricePerLitre: "100.50", costPerLitre: "94.40", dispenserId: "pump-a", dispenserCode: "A", sideId: "A-S1", sideLabel: "Side 1", nozzleNumber: 3, displayOrder: 3 }
+      ],
+      tankSnapshots: [
+        { tankId: "petrol_tank", code: "PT1", name: "Petrol Tank", productId: "petrol", productName: "Petrol", capacityLitres: "20000" },
+        { tankId: "diesel_tank", code: "DT1", name: "Diesel Tank", productId: "diesel", productName: "Diesel", capacityLitres: "20000" }
+      ],
+      openingNozzleReadings: { a_n1: "1000", a_n3: "2000" },
+      openingTankStocks: { petrol_tank: "5000", diesel_tank: "6000" },
+      createdAt: "2026-09-01T03:30:00.000Z", startedAt: "2026-09-01T03:30:00.000Z", version: 1
+    };
+    const input: CloseShiftInput = {
+      closingNozzleReadings: { a_n1: "1800", a_n3: "2500" },
+      closingTankStocks: { petrol_tank: "4200", diesel_tank: "5500" }, nonSaleDispenses: [],
+      receipts: { petrol_tank: "0", diesel_tank: "0" },
+      sideCollections: { "A-S1": { cash: "50000", upi: "60000", card: "22250", credit: "0", other: "0", declaredCashHandover: "50000" } },
+      payments: { cashSales: "50000", upi: "60000", card: "22250", credit: "0", other: "0", cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "50000" },
+      staffHandovers: { "staff-edwin": "132250" }, lubricantRevenue: "0", lubricantCost: "0", expenses: "0"
+    };
+
+    const result = reconcileShift(shift, input);
+    expect(result.sides).toEqual([expect.objectContaining({
+      sideId: "A-S1", dispenserCode: "A", staffName: "Edwin", litresSold: "1300.000",
+      expectedSalesValue: "132250.00", accountedTender: "132250.00", tenderVariance: "0.00"
+    })]);
+    expect(result.staff?.[0]).toEqual(expect.objectContaining({ staffName: "Edwin", litresSold: "1300.000", expectedSalesValue: "132250.00" }));
+  });
+
+  it("requires an explanation when side variances cancel in the overall total", () => {
+    const reconciliation = {
+      nozzles: {}, tanks: {},
+      sales: { expectedSales: "200.00", accountedTender: "200.00", tenderVariance: "0.00", expectedCashHandover: "0.00", cashVariance: "0.00" },
+      sides: [
+        { sideId: "A-S1", sideLabel: "Side 1", dispenserId: "pump-a", dispenserCode: "A", staffId: "one", staffName: "One", nozzleIds: [], litresSold: "1.000", expectedSalesValue: "100.00", cash: "0.00", upi: "110.00", card: "0.00", credit: "0.00", other: "0.00", accountedTender: "110.00", tenderVariance: "10.00", declaredCashHandover: "0.00", cashVariance: "0.00" },
+        { sideId: "A-S2", sideLabel: "Side 2", dispenserId: "pump-a", dispenserCode: "A", staffId: "two", staffName: "Two", nozzleIds: [], litresSold: "1.000", expectedSalesValue: "100.00", cash: "0.00", upi: "90.00", card: "0.00", credit: "0.00", other: "0.00", accountedTender: "90.00", tenderVariance: "-10.00", declaredCashHandover: "0.00", cashVariance: "0.00" }
+      ],
+      grossMargin: "0.00", estimatedOperatingProfit: "0.00"
+    } satisfies ShiftReconciliation;
+
+    expect(() => requireVarianceExplanation(reconciliation)).toThrow("Explain the payment or tank variance");
+    expect(() => requireVarianceExplanation(reconciliation, "Investigating side mismatch")).not.toThrow();
+  });
+
   it("attributes nozzle litres, expected collection and handover variance to the assigned staff", () => {
     const shift: ShiftRecord = {
       id: "shift-1",

@@ -29,6 +29,57 @@ export async function prepareCloseInput(
     );
   }
 
+  let canonicalPayments = structuredClone(input.payments);
+  let canonicalStaffHandovers = structuredClone(input.staffHandovers);
+  if (input.sideCollections) {
+    const stationsBySide = new Map<string, NonNullable<ShiftRecord["stationSnapshots"]>>();
+    for (const station of shift.stationSnapshots ?? []) {
+      const sideId = station.sideId ?? station.stationId;
+      stationsBySide.set(sideId, [...(stationsBySide.get(sideId) ?? []), station]);
+    }
+    for (const sideId of Object.keys(input.sideCollections)) {
+      if (!stationsBySide.has(sideId)) throw new Error(`Unknown pump side: ${sideId}`);
+    }
+    for (const sideId of stationsBySide.keys()) {
+      if (!input.sideCollections[sideId]) throw new Error(`Enter collections for pump side ${sideId}`);
+    }
+
+    const totals = {
+      cash: new Decimal(0), upi: new Decimal(0), card: new Decimal(0), credit: new Decimal(0),
+      other: new Decimal(0), declaredCashHandover: new Decimal(0)
+    };
+    const staffTotals = new Map<string, Decimal>();
+    for (const [sideId, stations] of stationsBySide) {
+      const collection = input.sideCollections[sideId];
+      if (!collection) continue;
+      totals.cash = totals.cash.plus(collection.cash);
+      totals.upi = totals.upi.plus(collection.upi);
+      totals.card = totals.card.plus(collection.card);
+      totals.credit = totals.credit.plus(collection.credit);
+      totals.other = totals.other.plus(collection.other);
+      totals.declaredCashHandover = totals.declaredCashHandover.plus(collection.declaredCashHandover);
+
+      const nozzleIds = new Set(stations.map((station) => station.stationId));
+      const assignment = (shift.staffAssignments ?? []).find((item) => nozzleIds.has(item.nozzleId));
+      if (assignment) {
+        const tender = Decimal.sum(collection.cash, collection.upi, collection.card, collection.credit, collection.other);
+        staffTotals.set(assignment.staffId, (staffTotals.get(assignment.staffId) ?? new Decimal(0)).plus(tender));
+      }
+    }
+    canonicalPayments = {
+      ...canonicalPayments,
+      cashSales: totals.cash.toString(),
+      upi: totals.upi.toString(),
+      card: totals.card.toString(),
+      credit: totals.credit.toString(),
+      other: totals.other.toString(),
+      declaredCashHandover: totals.declaredCashHandover.toString()
+    };
+    canonicalStaffHandovers = Object.fromEntries(
+      [...staffTotals].map(([staffId, total]) => [staffId, total.toString()])
+    );
+  }
+
   return {
     ...structuredClone(input),
     receipts: Object.fromEntries(
@@ -38,9 +89,10 @@ export async function prepareCloseInput(
       ])
     ),
     payments: {
-      ...structuredClone(input.payments),
+      ...canonicalPayments,
       cashExpenses: cashExpenseTotal.toString()
     },
+    staffHandovers: canonicalStaffHandovers,
     expenses: expenseTotal.toString()
   };
 }

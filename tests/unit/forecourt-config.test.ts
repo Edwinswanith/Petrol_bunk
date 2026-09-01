@@ -3,6 +3,17 @@ import { describe, expect, it } from "vitest";
 import { createMemoryForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 describe("forecourt configuration", () => {
+  it("seeds the physical two-pump, four-side, eight-nozzle layout", async () => {
+    const configuration = await createMemoryForecourtConfigStore({ seedDefaults: true }).getConfiguration();
+
+    expect(configuration.stations).toHaveLength(8);
+    expect(configuration.stations.map((station) => station.code)).toEqual([
+      "A-N1", "A-N2", "A-N3", "A-N4", "B-N1", "B-N2", "B-N3", "B-N4"
+    ]);
+    expect(configuration.stations.filter((station) => station.sideId === "A-S1").map((station) => station.code)).toEqual(["A-N1", "A-N3"]);
+    expect(configuration.stations.filter((station) => station.sideId === "A-S2").map((station) => station.code)).toEqual(["A-N2", "A-N4"]);
+  });
+
   it("adds a custom fuel, tank and station and keeps station codes unique", async () => {
     const store = createMemoryForecourtConfigStore({ seedDefaults: false });
     const product = await store.createProduct({ code: "XP95", name: "XP95", sellingPricePerLitre: "110", costPricePerLitre: "102" });

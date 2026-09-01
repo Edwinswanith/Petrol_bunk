@@ -15,6 +15,8 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 ## What works
 
 - Configure any number of fuel products, tanks, and independently metered stations, including petrol, diesel, XP95, X100, or custom grades.
+- Run the full day from one physical forecourt sheet: Pump A and Pump B, mirrored sides, eight nozzle totalizers, four side-level staff allocations, prices, tank readings and closing collections.
+- Store selling, purchase-cost and market-reference prices while locking the accounting price snapshot into each daily record.
 - Open one active shift with protected station totalizers, price snapshots, staff allocations, and physical tank stock.
 - Maintain a staff directory and daily present, late, absent, or leave register with check-in and check-out times.
 - Assign one primary operator to each station; one operator may run multiple stations and assigned operators are marked present automatically.
@@ -27,8 +29,9 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 - Preview every reconciliation before an idempotent, immutable close; shift closure and tank deduction are committed in one MongoDB transaction.
 - Require an explanation before closing a material payment, cash, or physical tank variance.
 - Calculate aggregated litres, expected sales value, declared handover, and handover variance for every assigned operator across all assigned stations.
+- Reconcile Cash, UPI, Card, Credit and Other collections independently for every pump side, then aggregate the same evidence into staff, product and daily totals.
 - Review live owner dashboards for sales, margin, expenses, fuel stock, throughput, payment mix, and exceptions.
-- Export a spreadsheet-safe daily CSV containing summaries, shifts, variances, expenses, and fuel receipts.
+- Export spreadsheet-safe daily, 7-day and 30-day CSV workbooks containing prices, nozzle readings, pump-side collections, staff performance, tank variances, expenses and fuel receipts.
 - Operate across desktop and mobile layouts without staff accounts, role management, or approval queues.
 
 ## Quick start
@@ -69,10 +72,10 @@ Use a MongoDB deployment that supports transactions so shift opening and closing
 
 1. Configure fuel products, selling/cost prices, tanks, and stations from **Products, tanks & stations**.
 2. Add staff and record attendance from **Staff & attendance**.
-3. Open the shift, allocate one operator to each active station, and confirm totalizers and tank stock.
+3. Open **Today**, allocate one operator to each pump side, confirm all eight nozzle totalizers, daily prices and tank stock, then start the business day.
 4. Record deliveries, density/water checks, and expenses during the shift.
-5. Enter closing totalizers, physical stock, test fuel, tender totals, operator handovers, and declared cash.
-6. Review product sales, operator performance, payment variance, expected tank balances, and physical stock variance.
+5. Return to the same **Today** page and enter closing totalizers, physical stock, test fuel, and Cash/UPI/Card/Credit collections for every pump side.
+6. Review nozzle, side, product and operator sales, payment variance, expected tank balances, and physical stock variance.
 7. Close once. Tank inventory is updated and the shift is locked in the same transaction.
 8. Review the per-tank movement ledger, or download the daily operations CSV from Reports.
 
@@ -107,8 +110,9 @@ The runtime health endpoint is `GET /api/health`.
 
 ## v1 boundaries
 
-- One owner and one active shift. Products, tanks, stations, and staff allocations are configurable.
-- One primary operator is assigned to each station for the full shift. An operator may run multiple stations; mid-shift reassignment and shared-station splits are deferred.
+- One owner and one active daily forecourt sheet. Products, tanks, pumps, sides, nozzles, and staff allocations are configurable.
+- The default layout is Pump A and Pump B with N1/N3 on Side 1 and N2/N4 on Side 2. N1/N2 default to petrol and N3/N4 to diesel; mappings remain configuration data.
+- One primary operator is assigned to each pump side for the full day. An operator may run multiple sides; mid-day reassignment and shared-side splits are deferred.
 - There are no staff accounts, roles, approvals, invitations, or staff-facing screens; the owner records all activity.
 - Closed shifts are immutable in v1.
 - Packaged-goods stock is an owner reference list rather than a transactional inventory ledger.

@@ -132,11 +132,50 @@ export function reconcileShift(
     };
   });
 
+  const sides: NonNullable<ShiftReconciliation["sides"]> = [];
+  const groupedSides = new Map<string, NonNullable<ShiftRecord["stationSnapshots"]>>();
+  for (const station of shift.stationSnapshots ?? []) {
+    if (!station.sideId && !input.sideCollections?.[station.stationId]) continue;
+    const sideId = station.sideId ?? station.stationId;
+    groupedSides.set(sideId, [...(groupedSides.get(sideId) ?? []), station]);
+  }
+  for (const [sideId, stations] of groupedSides) {
+    const nozzleIds = stations.map((station) => station.stationId);
+    const assignment = (shift.staffAssignments ?? []).find((item) => nozzleIds.includes(item.nozzleId));
+    const collection = input.sideCollections?.[sideId] ?? {
+      cash: "0", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "0"
+    };
+    const litres = Decimal.sum(0, ...nozzleIds.map((id) => nozzleResults[id]?.customerSalesVolume ?? "0"));
+    const expected = Decimal.sum(0, ...nozzleIds.map((id) => nozzleResults[id]?.revenue ?? "0"));
+    const accounted = Decimal.sum(collection.cash, collection.upi, collection.card, collection.credit, collection.other);
+    sides.push({
+      sideId,
+      sideLabel: stations[0].sideLabel ?? sideId,
+      dispenserId: stations[0].dispenserId ?? "",
+      dispenserCode: stations[0].dispenserCode ?? "",
+      staffId: assignment?.staffId ?? "",
+      staffName: assignment?.staffName ?? "Unassigned",
+      nozzleIds,
+      litresSold: litres.toDecimalPlaces(3).toFixed(3),
+      expectedSalesValue: expected.toDecimalPlaces(2).toFixed(2),
+      cash: new Decimal(collection.cash).toDecimalPlaces(2).toFixed(2),
+      upi: new Decimal(collection.upi).toDecimalPlaces(2).toFixed(2),
+      card: new Decimal(collection.card).toDecimalPlaces(2).toFixed(2),
+      credit: new Decimal(collection.credit).toDecimalPlaces(2).toFixed(2),
+      other: new Decimal(collection.other).toDecimalPlaces(2).toFixed(2),
+      accountedTender: accounted.toDecimalPlaces(2).toFixed(2),
+      tenderVariance: accounted.minus(expected).toDecimalPlaces(2).toFixed(2),
+      declaredCashHandover: new Decimal(collection.declaredCashHandover).toDecimalPlaces(2).toFixed(2),
+      cashVariance: new Decimal(collection.declaredCashHandover).minus(collection.cash).toDecimalPlaces(2).toFixed(2)
+    });
+  }
+
   return {
     nozzles: nozzleResults,
     tanks: tankResults,
     sales,
     staff,
+    sides,
     products: [...productTotals.values()].map((product) => ({
       productId: product.productId,
       productName: product.productName,
@@ -151,7 +190,11 @@ export function requireVarianceExplanation(reconciliation: ShiftReconciliation, 
   const paymentVariance = new Decimal(reconciliation.sales.tenderVariance).abs();
   const cashVariance = new Decimal(reconciliation.sales.cashVariance).abs();
   const tankVariance = Object.values(reconciliation.tanks).some((tank) => new Decimal(tank.variance).abs().greaterThan("1"));
-  if ((paymentVariance.greaterThan("1") || cashVariance.greaterThan("1") || tankVariance) && !explanation?.trim()) {
+  const sideVariance = reconciliation.sides?.some((side) =>
+    new Decimal(side.tenderVariance).abs().greaterThan("1") ||
+    new Decimal(side.cashVariance).abs().greaterThan("1")
+  );
+  if ((paymentVariance.greaterThan("1") || cashVariance.greaterThan("1") || tankVariance || sideVariance) && !explanation?.trim()) {
     throw new CalculationError("Explain the payment or tank variance before closing the shift");
   }
 }

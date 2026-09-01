@@ -54,4 +54,76 @@ describe("prepareCloseInput", () => {
     expect(prepared.expenses).toBe("300");
     expect(prepared.payments.cashSales).toBe("10000");
   });
+
+  it("derives canonical payment and staff totals from pump-side collections", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const pumpShift: ShiftRecord = {
+      ...shift,
+      staffAssignments: [
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n1" },
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n3" },
+        { staffId: "staff-priya", staffName: "Priya", nozzleId: "a_n2" }
+      ],
+      stationSnapshots: [
+        { stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", sideId: "A-S1" },
+        { stationId: "a_n3", code: "A-N3", name: "Nozzle 3", productId: "diesel", productName: "Diesel", tankId: "diesel_tank", tankName: "Diesel Tank", pricePerLitre: "90", costPerLitre: "85", sideId: "A-S1" },
+        { stationId: "a_n2", code: "A-N2", name: "Nozzle 2", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", sideId: "A-S2" }
+      ]
+    };
+    const prepared = await prepareCloseInput(pumpShift, {
+      ...closeInput,
+      payments: { ...closeInput.payments, cashSales: "999999", upi: "999999", declaredCashHandover: "999999" },
+      staffHandovers: { "staff-edwin": "999999" },
+      sideCollections: {
+        "A-S1": { cash: "0.10", upi: "0.20", card: "10", credit: "2", other: "3", declaredCashHandover: "0.10" },
+        "A-S2": { cash: "20", upi: "30", card: "40", credit: "5", other: "6", declaredCashHandover: "20" }
+      }
+    });
+
+    expect(prepared.payments).toEqual(expect.objectContaining({
+      cashSales: "20.1", upi: "30.2", card: "50", credit: "7", other: "9", declaredCashHandover: "20.1"
+    }));
+    expect(prepared.staffHandovers).toEqual({ "staff-edwin": "15.3", "staff-priya": "101" });
+  });
+
+  it("does not allow a configured pump side to be omitted from closing", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const pumpShift: ShiftRecord = {
+      ...shift,
+      stationSnapshots: [
+        { stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", sideId: "A-S1" },
+        { stationId: "a_n2", code: "A-N2", name: "Nozzle 2", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", sideId: "A-S2" }
+      ]
+    };
+
+    await expect(prepareCloseInput(pumpShift, {
+      ...closeInput,
+      sideCollections: {
+        "A-S1": { cash: "0", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "0" }
+      }
+    })).rejects.toThrow("Enter collections for pump side A-S2");
+  });
+
+  it("treats a custom station without layout metadata as its own side", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const customShift: ShiftRecord = {
+      ...shift,
+      staffAssignments: [{ staffId: "staff-edwin", staffName: "Edwin", nozzleId: "xp95" }],
+      stationSnapshots: [
+        { stationId: "xp95", code: "XP95", name: "XP95 station", productId: "xp95", productName: "XP95", tankId: "xp95_tank", tankName: "XP95 Tank", pricePerLitre: "110", costPerLitre: "102" }
+      ]
+    };
+    const prepared = await prepareCloseInput(customShift, {
+      ...closeInput,
+      sideCollections: {
+        xp95: { cash: "10", upi: "20", card: "0", credit: "0", other: "0", declaredCashHandover: "10" }
+      }
+    });
+
+    expect(prepared.payments).toEqual(expect.objectContaining({ cashSales: "10", upi: "20" }));
+    expect(prepared.staffHandovers).toEqual({ "staff-edwin": "30" });
+  });
 });

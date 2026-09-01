@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  ClipboardPenLine,
   Fuel,
   Gauge,
   House,
@@ -15,6 +16,7 @@ import type { ReactNode } from "react";
 
 const navigation = [
   { href: "/", label: "Home", icon: House },
+  { href: "/day", label: "Today", icon: ClipboardPenLine },
   { href: "/shifts", label: "Shifts", icon: Gauge },
   { href: "/stock", label: "Stock", icon: Fuel },
   { href: "/finance", label: "Finance", icon: WalletCards },

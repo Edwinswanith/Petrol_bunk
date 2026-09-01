@@ -15,6 +15,18 @@ export async function prepareOpenShiftInput(input: OpenShiftInput): Promise<Open
   if (invalidAssignment) throw new Error(`Unknown assigned station: ${invalidAssignment.nozzleId}`);
   const unassignedStation = activeStations.find((station) => !input.staffAssignments?.some((assignment) => assignment.nozzleId === station.id));
   if (unassignedStation) throw new Error(`Assign an operator to ${unassignedStation.code}`);
+  const sides = new Map<string, typeof activeStations>();
+  for (const station of activeStations) {
+    const sideId = station.sideId ?? station.id;
+    sides.set(sideId, [...(sides.get(sideId) ?? []), station]);
+  }
+  for (const sideStations of sides.values()) {
+    const staffIds = new Set(sideStations.map((station) => input.staffAssignments?.find((assignment) => assignment.nozzleId === station.id)?.staffId));
+    if (staffIds.size !== 1) {
+      const station = sideStations[0];
+      throw new Error(`Assign one operator to every nozzle on Pump ${station.dispenserCode} ${station.sideLabel}`);
+    }
+  }
 
   const stationSnapshots = activeStations.map((station) => {
     const product = products.get(station.productId);
@@ -31,7 +43,11 @@ export async function prepareOpenShiftInput(input: OpenShiftInput): Promise<Open
       tankId: tank.id,
       tankName: tank.name,
       pricePerLitre: product.sellingPricePerLitre,
-      costPerLitre: product.costPricePerLitre
+      costPerLitre: product.costPricePerLitre,
+      marketReferencePrice: product.marketReferencePrice,
+      dispenserId: station.dispenserId ?? station.id, dispenserCode: station.dispenserCode ?? station.code,
+      sideId: station.sideId ?? station.id, sideLabel: station.sideLabel ?? station.name,
+      nozzleNumber: station.nozzleNumber, displayOrder: station.displayOrder
     };
   });
   const referencedTankIds = [...new Set(stationSnapshots.map((station) => station.tankId))];

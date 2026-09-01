@@ -15,20 +15,25 @@ function row(values: unknown[]) {
 }
 
 export async function GET(request: Request) {
-  const requestedDate = new URL(request.url).searchParams.get("date");
+  const search = new URL(request.url).searchParams;
+  const requestedDate = search.get("date");
   const date = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
     ? requestedDate
     : businessDate();
+  const requestedFrom = search.get("from");
+  const requestedTo = search.get("to");
+  const from = requestedFrom && /^\d{4}-\d{2}-\d{2}$/.test(requestedFrom) ? requestedFrom : date;
+  const to = requestedTo && /^\d{4}-\d{2}-\d{2}$/.test(requestedTo) ? requestedTo : date;
   const [shifts, expenses, receipts] = await Promise.all([
     getOperationsRepository().listShifts(),
     listExpenses(),
     listFuelReceipts()
   ]);
-  const dayShifts = shifts.filter((shift) => shift.businessDate === date);
-  const dayExpenses = expenses.filter((expense) => expense.date === date);
+  const dayShifts = shifts.filter((shift) => shift.businessDate >= from && shift.businessDate <= to);
+  const dayExpenses = expenses.filter((expense) => expense.date >= from && expense.date <= to);
   const shiftIds = new Set(dayShifts.map((shift) => shift.id));
   const dayReceipts = receipts.filter(
-    (receipt) => (receipt.shiftId && shiftIds.has(receipt.shiftId)) || businessDate(new Date(receipt.createdAt)) === date
+    (receipt) => (receipt.shiftId && shiftIds.has(receipt.shiftId)) || (businessDate(new Date(receipt.createdAt)) >= from && businessDate(new Date(receipt.createdAt)) <= to)
   );
   const sales = Decimal.sum(0, ...dayShifts.map((shift) => shift.reconciliation?.sales.expectedSales ?? "0"));
   const tender = Decimal.sum(0, ...dayShifts.map((shift) => shift.reconciliation?.sales.accountedTender ?? "0"));
@@ -37,7 +42,7 @@ export async function GET(request: Request) {
 
   const rows = [
     row(["Forecourt daily operations export"]),
-    row(["Business date", date]),
+    row(["Business period", from === to ? from : `${from} to ${to}`]),
     row(["Generated at", new Date().toISOString()]),
     "",
     row(["SUMMARY"]),
@@ -62,6 +67,25 @@ export async function GET(request: Request) {
       shift.reconciliation?.tanks.diesel_tank?.variance
     ])),
     "",
+    row(["PRODUCT SALES"]),
+    row(["Business date", "Product", "Litres sold", "Revenue"]),
+    ...dayShifts.flatMap((shift) => (shift.reconciliation?.products ?? []).map((product) => row([shift.businessDate, product.productName, product.litresSold, product.revenue]))),
+    "",
+    row(["NOZZLE LEDGER"]),
+    row(["Business date", "Pump", "Side", "Nozzle", "Product", "Opening", "Closing", "Litres sold", "Revenue", "Selling price", "Purchase cost"]),
+    ...dayShifts.flatMap((shift) => Object.entries(shift.reconciliation?.nozzles ?? {}).map(([nozzleId, result]) => {
+      const station = shift.stationSnapshots?.find((item) => item.stationId === nozzleId);
+      return row([shift.businessDate, station?.dispenserCode, station?.sideLabel, station?.code ?? nozzleId, station?.productName, shift.openingNozzleReadings[nozzleId], shift.closingNozzleReadings?.[nozzleId], result.customerSalesVolume, result.revenue, station?.pricePerLitre, station?.costPerLitre]);
+    })),
+    "",
+    row(["PUMP SIDE RECONCILIATION"]),
+    row(["Business date", "Pump", "Side", "Operator", "Nozzles", "Litres", "Expected sales", "Cash", "UPI", "Card", "Credit", "Other", "Accounted tender", "Tender variance", "Cash handover", "Cash variance"]),
+    ...dayShifts.flatMap((shift) => (shift.reconciliation?.sides ?? []).map((side) => row([shift.businessDate, side.dispenserCode, side.sideLabel, side.staffName, side.nozzleIds.join(" + "), side.litresSold, side.expectedSalesValue, side.cash, side.upi, side.card, side.credit, side.other, side.accountedTender, side.tenderVariance, side.declaredCashHandover, side.cashVariance]))),
+    "",
+    row(["STAFF PERFORMANCE"]),
+    row(["Business date", "Staff", "Machines", "Products", "Litres", "Expected sales", "Declared collection", "Variance"]),
+    ...dayShifts.flatMap((shift) => (shift.reconciliation?.staff ?? []).map((staff) => row([shift.businessDate, staff.staffName, staff.machineLabel, staff.product, staff.litresSold, staff.expectedSalesValue, staff.declaredHandover, staff.handoverVariance]))),
+    "",
     row(["EXPENSES"]),
     row(["Category", "Amount", "Payment method", "Note", "Recorded at"]),
     ...dayExpenses.map((expense) => row([expense.category, expense.amount, expense.paymentMethod, expense.note, expense.createdAt])),
@@ -74,7 +98,7 @@ export async function GET(request: Request) {
   return new Response(`\uFEFF${rows.join("\r\n")}\r\n`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="forecourt-${date}.csv"`,
+      "Content-Disposition": `attachment; filename="forecourt-${from}${from === to ? "" : `-to-${to}`}.csv"`,
       "Cache-Control": "no-store"
     }
   });

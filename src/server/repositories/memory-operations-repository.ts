@@ -12,6 +12,15 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+const legacyStationSnapshots = [
+  { stationId: "petrol_1", code: "P1", name: "Petrol station P1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank 1", pricePerLitre: "102.50", costPerLitre: "96.80" },
+  { stationId: "diesel_1", code: "D1", name: "Diesel station D1", productId: "diesel", productName: "Diesel", tankId: "diesel_tank", tankName: "Diesel Tank 1", pricePerLitre: "100.50", costPerLitre: "94.40" }
+];
+const legacyTankSnapshots = [
+  { tankId: "petrol_tank", code: "PT1", name: "Petrol Tank 1", productId: "petrol", productName: "Petrol", capacityLitres: "20000" },
+  { tankId: "diesel_tank", code: "DT1", name: "Diesel Tank 1", productId: "diesel", productName: "Diesel", capacityLitres: "20000" }
+];
+
 function createClosedDemoShift(): ShiftRecord {
   const shift: ShiftRecord = {
     id: "shift-closed-001",
@@ -19,6 +28,7 @@ function createClosedDemoShift(): ShiftRecord {
     name: "Morning shift",
     businessDate: "2026-08-31",
     staffOnDuty: ["Arun"],
+    stationSnapshots: clone(legacyStationSnapshots), tankSnapshots: clone(legacyTankSnapshots),
     openingNozzleReadings: { petrol_1: "180000.000", diesel_1: "90000.000" },
     openingTankStocks: { petrol_tank: "15700", diesel_tank: "11100" },
     createdAt: "2026-08-31T03:30:00.000Z",
@@ -66,6 +76,7 @@ function createLiveDemoShift(): ShiftRecord {
     name: "Evening shift",
     businessDate: "2026-08-31",
     staffOnDuty: ["Kumar", "Ravi"],
+    stationSnapshots: clone(legacyStationSnapshots), tankSnapshots: clone(legacyTankSnapshots),
     openingNozzleReadings: { petrol_1: "183240.000", diesel_1: "92097.015" },
     openingTankStocks: { petrol_tank: "12460", diesel_tank: "9002.985" },
     createdAt: "2026-08-31T11:30:00.000Z",

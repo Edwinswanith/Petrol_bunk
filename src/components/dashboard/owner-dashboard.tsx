@@ -102,7 +102,7 @@ export function OwnerDashboard({ dashboard }: { dashboard: DashboardViewModel })
               <div><p className="panel-kicker">Fast entry</p><h2 className="panel-title">Quick actions</h2></div>
             </div>
             <nav className="quick-actions" aria-label="Quick actions">
-              <Link className="quick-action" href={activeShift ? `/shifts/${activeShift.id}` : "/shifts/new"}>{activeShift ? <ClipboardPenLine aria-hidden="true" size={20} /> : <Play aria-hidden="true" size={20} />}<strong>{activeShift ? "Continue shift" : "Open shift"}</strong></Link>
+              <Link className="quick-action" href="/day">{activeShift ? <ClipboardPenLine aria-hidden="true" size={20} /> : <Play aria-hidden="true" size={20} />}<strong>{activeShift ? "Continue today’s sheet" : "Start business day"}</strong></Link>
               <Link className="quick-action" href="/finance/expenses/new"><ReceiptText aria-hidden="true" size={20} /><strong>Record expense</strong></Link>
               <Link className="quick-action" href="/stock/receipts/new"><Truck aria-hidden="true" size={20} /><strong>Receive fuel</strong></Link>
             </nav>
