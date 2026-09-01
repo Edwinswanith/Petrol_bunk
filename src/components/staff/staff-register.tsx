@@ -4,9 +4,9 @@ import { Banknote, Clock3, Save, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import type { AttendanceRecord, StaffRecord } from "@/server/domain/staff";
+import type { AttendanceRecord, PayrollRecord, StaffRecord } from "@/server/domain/staff";
 
-export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[]; attendance: AttendanceRecord[]; date: string }) {
+export function StaffRegister({ staff, attendance, payroll, date, month }: { staff: StaffRecord[]; attendance: AttendanceRecord[]; payroll: PayrollRecord[]; date: string; month: string }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -46,6 +46,11 @@ export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[
     });
   }
 
+  function savePayroll(event: FormEvent<HTMLFormElement>, staffId: string) {
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    void post("/api/payroll", { staffId, month: String(form.get("month")), halfDays: Number(form.get("halfDays") || 0), overtime: String(form.get("overtime") || "0"), attendanceDeduction: String(form.get("attendanceDeduction") || "0"), advances: String(form.get("advances") || "0"), otherDeductions: String(form.get("otherDeductions") || "0"), amountPaid: String(form.get("amountPaid") || "0"), note: String(form.get("note") || "") });
+  }
+
   return <div className="staff-register-grid">
     <section className="panel panel-pad">
       <div className="panel-header"><div><p className="panel-kicker">Staff directory</p><h2 className="panel-title">Add an operator</h2></div><UserPlus size={19} color="#087665" /></div>
@@ -74,6 +79,12 @@ export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[
       <div className="panel-header"><div><p className="panel-kicker">Monthly payroll setup</p><h2 className="panel-title">Staff salary</h2></div><Banknote size={19} color="#087665" /></div>
       <p className="page-description small">This monthly commitment is included in the Finance profit estimate. Salary payments recorded as expenses remain visible separately.</p>
       {staff.length ? <div className="salary-list">{staff.map((person) => <form key={person.id} onSubmit={(event) => updateSalary(event, person.id)}><span className="salary-person"><strong>{person.name}</strong><small>{person.phone || "Active operator"}</small></span><label><span>Monthly salary</span><span className="salary-input"><b>₹</b><input aria-label={`${person.name} monthly salary`} defaultValue={person.monthlySalary ?? "0"} min="0" name="monthlySalary" required step="0.01" type="number" /></span></label><button aria-label={`Save ${person.name} salary`} className="icon-button" disabled={saving} type="submit"><Save size={15} /></button></form>)}</div> : <p className="empty-state">Add a staff member to configure salary.</p>}
+    </section>
+    <section className="panel panel-pad payroll-panel">
+      <div className="panel-header"><div><p className="panel-kicker">Attendance-aware settlement</p><h2 className="panel-title">Salary due, paid &amp; balance</h2></div><Banknote size={19} color="#087665" /></div>
+      <p className="page-description small">Attendance counts are copied from the register. Enter the actual deduction approved by the owner, advances, overtime and amount paid; the system never guesses a salary policy.</p>
+      <div className="payroll-editor-list">{staff.map((person) => { const saved = payroll.find((record) => record.staffId === person.id && record.month === month); return <form key={person.id} onSubmit={(event) => savePayroll(event, person.id)}><header><span><strong>{person.name}</strong><small>Base ₹{Number(person.monthlySalary ?? 0).toLocaleString("en-IN")}</small></span>{saved ? <span className="payroll-balance"><small>Balance due</small><strong>₹{Number(saved.balanceDue).toLocaleString("en-IN")}</strong></span> : null}</header><div className="payroll-fields"><label><span>Month</span><input defaultValue={month} name="month" type="month" required /></label><label><span>Half days</span><input defaultValue={saved?.halfDays ?? 0} min="0" name="halfDays" type="number" /></label><label><span>Overtime ₹</span><input defaultValue={saved?.overtime ?? "0"} min="0" name="overtime" step="0.01" type="number" /></label><label><span>Attendance deduction ₹</span><input defaultValue={saved?.attendanceDeduction ?? "0"} min="0" name="attendanceDeduction" step="0.01" type="number" /></label><label><span>Advances ₹</span><input defaultValue={saved?.advances ?? "0"} min="0" name="advances" step="0.01" type="number" /></label><label><span>Other deductions ₹</span><input defaultValue={saved?.otherDeductions ?? "0"} min="0" name="otherDeductions" step="0.01" type="number" /></label><label><span>Amount paid ₹</span><input defaultValue={saved?.amountPaid ?? "0"} min="0" name="amountPaid" step="0.01" type="number" /></label><label><span>Note</span><input defaultValue={saved?.note ?? ""} name="note" /></label></div>{saved ? <div className="payroll-result"><span>{saved.presentDays} present · {saved.lateDays} late · {saved.absentDays} absent · {saved.leaveDays} leave</span><span>Gross ₹{saved.grossPay} · deductions ₹{saved.totalDeductions} · net ₹{saved.netPay} · paid ₹{saved.amountPaid}</span></div> : null}<button className="button primary" disabled={saving}><Save size={14} />Save settlement</button></form>; })}</div>
+      {payroll.length ? <details className="payroll-history"><summary>View payroll history</summary><table className="data-table"><thead><tr><th>Month</th><th>Staff</th><th>Net</th><th>Paid</th><th>Balance</th></tr></thead><tbody>{payroll.map((record) => <tr key={record.id}><td>{record.month}</td><td>{record.staffName}</td><td>₹{record.netPay}</td><td>₹{record.amountPaid}</td><td>₹{record.balanceDue}</td></tr>)}</tbody></table></details> : null}
     </section>
   </div>;
 }

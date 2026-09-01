@@ -117,6 +117,19 @@ async function ensureMongoConfig() {
         database.collection<FuelStation>("fuelStations").updateMany({ id: { $in: ["petrol_1", "diesel_1"] } }, { $set: { active: false, updatedAt: layoutDate } }),
         ...defaultStations.map((item) => database.collection<FuelStation>("fuelStations").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true }))
       ]);
+      const xpPattern = /^(XP\s?(95|100)|X\s?(95|100))/i;
+      const xpProducts = await database.collection<FuelProduct>("fuelProducts").find({ $or: [{ code: xpPattern }, { name: xpPattern }] }).project<{ id: string }>({ id: 1, _id: 0 }).toArray();
+      const xpProductIds = xpProducts.map((product) => product.id);
+      if (xpProductIds.length) {
+        const now = new Date().toISOString();
+        const xpTanks = await database.collection<FuelTank>("fuelTanks").find({ productId: { $in: xpProductIds } }).project<{ id: string }>({ id: 1, _id: 0 }).toArray();
+        await Promise.all([
+          database.collection<FuelProduct>("fuelProducts").updateMany({ id: { $in: xpProductIds } }, { $set: { active: false, updatedAt: now } }),
+          database.collection<FuelTank>("fuelTanks").updateMany({ productId: { $in: xpProductIds } }, { $set: { active: false, updatedAt: now } }),
+          database.collection<FuelStation>("fuelStations").updateMany({ $or: [{ productId: { $in: xpProductIds } }, { tankId: { $in: xpTanks.map((tank) => tank.id) } }] }, { $set: { active: false, updatedAt: now } })
+        ]);
+      }
+      await database.collection<FuelStation>("fuelStations").deleteMany({ code: { $in: ["XD", "XM"] } });
     })();
   }
   return mongoConfigIndexes;

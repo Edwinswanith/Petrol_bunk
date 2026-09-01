@@ -16,12 +16,12 @@ describe("forecourt configuration", () => {
 
   it("adds a custom fuel, tank and station and keeps station codes unique", async () => {
     const store = createMemoryForecourtConfigStore({ seedDefaults: false });
-    const product = await store.createProduct({ code: "XP95", name: "XP95", sellingPricePerLitre: "110", costPricePerLitre: "102" });
-    const tank = await store.createTank({ code: "XT1", name: "XP95 Tank", productId: product.id, capacityLitres: "10000", currentStock: "5000" });
-    const station = await store.createStation({ code: "X1", name: "XP95 Station 1", productId: product.id, tankId: tank.id, totalizerPrecision: 3 });
+    const product = await store.createProduct({ code: "ALT", name: "Alternate", sellingPricePerLitre: "110", costPricePerLitre: "102" });
+    const tank = await store.createTank({ code: "AT1", name: "Alternate Tank", productId: product.id, capacityLitres: "10000", currentStock: "5000" });
+    const station = await store.createStation({ code: "A1", name: "Alternate Station 1", productId: product.id, tankId: tank.id, totalizerPrecision: 3 });
 
-    expect((await store.getConfiguration()).stations).toContainEqual(expect.objectContaining({ id: station.id, code: "X1", productId: product.id, tankId: tank.id }));
-    await expect(store.createStation({ code: "X1", name: "Duplicate", productId: product.id, tankId: tank.id, totalizerPrecision: 3 })).rejects.toThrow("Station code already exists");
+    expect((await store.getConfiguration()).stations).toContainEqual(expect.objectContaining({ id: station.id, code: "A1", productId: product.id, tankId: tank.id }));
+    await expect(store.createStation({ code: "A1", name: "Duplicate", productId: product.id, tankId: tank.id, totalizerPrecision: 3 })).rejects.toThrow("Station code already exists");
   });
 
   it("rejects a station when its product does not match the selected tank", async () => {

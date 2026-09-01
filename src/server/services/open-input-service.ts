@@ -29,8 +29,9 @@ export async function prepareOpenShiftInput(input: OpenShiftInput): Promise<Open
   }
 
   const stationSnapshots = activeStations.map((station) => {
-    const product = products.get(station.productId);
-    const tank = tanks.get(station.tankId);
+    const override = input.stationOverrides?.[station.id];
+    const product = products.get(override?.productId ?? station.productId);
+    const tank = tanks.get(override?.tankId ?? station.tankId);
     if (!product || !product.active) throw new Error(`Active product not found for ${station.code}`);
     if (!tank || !tank.active) throw new Error(`Active tank not found for ${station.code}`);
     if (tank.productId !== product.id) throw new Error(`Station product does not match its tank: ${station.code}`);

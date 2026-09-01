@@ -7,6 +7,7 @@ import type { FuelTank, InventoryMovement } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 import type { OperationsRepository } from "@/server/repositories/operations-repository";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
+import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
 
 type StoredShift = ShiftRecord & { _id: string };
 type IdempotencyRecord = { _id: string; shiftId: string; createdAt: Date };
@@ -211,6 +212,21 @@ export function createMongoOperationsRepository(): OperationsRepository {
       );
       if (!update) throw new Error("Shift changed on another device. Refresh and retry.");
       return withoutId(update);
+    },
+
+    async updateActiveShift(id, input) {
+      await ensureIndexes();
+      const client = await getMongoClient(); const database = await getMongoDatabase(); const session = client.startSession(); let result: ShiftRecord | undefined;
+      try { await session.withTransaction(async () => {
+        const current = await database.collection<StoredShift>("shifts").findOne({ _id: id }, { session });
+        if (!current) throw new Error("Shift not found");
+        const corrected = applyActiveShiftCorrection(withoutId(current), input);
+        const update = await database.collection<StoredShift>("shifts").replaceOne({ _id: id, version: current.version, state: "OPEN" }, { ...corrected }, { session });
+        if (update.modifiedCount !== 1) throw new Error("Shift changed on another device. Refresh and retry.");
+        for (const [productId, rate] of Object.entries(input.productRates ?? {})) await database.collection("fuelProducts").updateOne({ id: productId, active: true }, { $set: { sellingPricePerLitre: rate.sellingPricePerLitre, costPricePerLitre: rate.costPricePerLitre, marketReferencePrice: rate.sellingPricePerLitre, updatedAt: new Date().toISOString() } }, { session });
+        result = corrected;
+      }); } finally { await session.endSession(); }
+      if (!result) throw new Error("Active-day correction did not complete"); return result;
     },
 
     async getTankBalances() {

@@ -251,8 +251,8 @@ describe("staff machine reconciliation", () => {
       nozzles: {}, tanks: {},
       sales: { expectedSales: "200.00", accountedTender: "200.00", tenderVariance: "0.00", expectedCashHandover: "0.00", cashVariance: "0.00" },
       sides: [
-        { sideId: "A-S1", sideLabel: "Side 1", dispenserId: "pump-a", dispenserCode: "A", staffId: "one", staffName: "One", nozzleIds: [], litresSold: "1.000", expectedSalesValue: "100.00", cash: "0.00", upi: "110.00", card: "0.00", credit: "0.00", other: "0.00", accountedTender: "110.00", tenderVariance: "10.00", declaredCashHandover: "0.00", cashVariance: "0.00" },
-        { sideId: "A-S2", sideLabel: "Side 2", dispenserId: "pump-a", dispenserCode: "A", staffId: "two", staffName: "Two", nozzleIds: [], litresSold: "1.000", expectedSalesValue: "100.00", cash: "0.00", upi: "90.00", card: "0.00", credit: "0.00", other: "0.00", accountedTender: "90.00", tenderVariance: "-10.00", declaredCashHandover: "0.00", cashVariance: "0.00" }
+        { sideId: "A-S1", sideLabel: "Side 1", dispenserId: "pump-a", dispenserCode: "A", staffId: "one", staffName: "One", nozzleIds: [], litresSold: "1.000", expectedSalesValue: "100.00", cash: "0.00", upi: "110.00", card: "0.00", credit: "0.00", other: "0.00", accountedTender: "110.00", tenderVariance: "10.00", declaredCashHandover: "0.00", cashVariance: "0.00", products: [] },
+        { sideId: "A-S2", sideLabel: "Side 2", dispenserId: "pump-a", dispenserCode: "A", staffId: "two", staffName: "Two", nozzleIds: [], litresSold: "1.000", expectedSalesValue: "100.00", cash: "0.00", upi: "90.00", card: "0.00", credit: "0.00", other: "0.00", accountedTender: "90.00", tenderVariance: "-10.00", declaredCashHandover: "0.00", cashVariance: "0.00", products: [] }
       ],
       grossMargin: "0.00", estimatedOperatingProfit: "0.00"
     } satisfies ShiftReconciliation;

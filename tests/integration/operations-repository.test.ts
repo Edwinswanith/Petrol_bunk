@@ -146,6 +146,21 @@ describe("MemoryOperationsRepository", () => {
     expect(updated.version).toBe(2);
   });
 
+  it("corrects active-day opening readings and operator assignments but protects closed records", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({ name: "Daily forecourt sheet", businessDate: "2026-09-01", staffOnDuty: ["Edwin"], staffAssignments: [{ staffId: "edwin", staffName: "Edwin", nozzleId: "petrol_1" }], openingNozzleReadings: { petrol_1: "100" }, openingTankStocks: { petrol_tank: "1000" } }, "correction-open");
+    const corrected = await repository.updateActiveShift(shift.id, { openingNozzleReadings: { petrol_1: "105" }, staffAssignments: [{ staffId: "priya", staffName: "Priya", nozzleId: "petrol_1" }] });
+    expect(corrected).toEqual(expect.objectContaining({ openingNozzleReadings: { petrol_1: "105" }, staffOnDuty: ["Priya"], version: 2 }));
+  });
+
+  it("updates active-day reseller/customer rates and records correction history", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({ name: "Daily forecourt sheet", businessDate: "2026-09-01", staffOnDuty: ["Arun"], staffAssignments: [{ staffId: "arun", staffName: "Arun", nozzleId: "a_n1" }], stationSnapshots: [{ stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "102.50", costPerLitre: "96.80" }], openingNozzleReadings: { a_n1: "1000" }, openingTankStocks: { petrol_tank: "5000" } }, "rate-open");
+    const corrected = await repository.updateActiveShift(shift.id, { openingNozzleReadings: { a_n1: "1005" }, staffAssignments: [{ staffId: "priya", staffName: "Priya", nozzleId: "a_n1" }], productRates: { petrol: { sellingPricePerLitre: "104", costPricePerLitre: "97" } }, reason: "Corrected morning sheet" } as never);
+    expect(corrected.stationSnapshots?.[0]).toEqual(expect.objectContaining({ pricePerLitre: "104", costPerLitre: "97" }));
+    expect(corrected.corrections).toEqual([expect.objectContaining({ reason: "Corrected morning sheet" })]);
+  });
+
   it("deducts aggregated station outflow from tank inventory once when a shift closes", async () => {
     const repository = createMemoryOperationsRepository({ seedDemoData: false });
     const shift = await repository.openShift({

@@ -1,4 +1,5 @@
 import type {
+  ActiveShiftCorrectionInput,
   CloseShiftInput,
   OpenShiftInput,
   ShiftRecord
@@ -7,6 +8,7 @@ import { reconcileShift, requireVarianceExplanation } from "@/server/services/sh
 import Decimal from "decimal.js";
 import type { InventoryMovement } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
+import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -206,6 +208,17 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
         version: shift.version + 1
       };
       shifts.set(id, updated);
+      return clone(updated);
+    },
+
+    async updateActiveShift(id: string, input: ActiveShiftCorrectionInput): Promise<ShiftRecord> {
+      const shift = shifts.get(id);
+      if (!shift) throw new Error("Shift not found");
+      const updated = applyActiveShiftCorrection(shift, input);
+      shifts.set(id, updated);
+      for (const [productId, rate] of Object.entries(input.productRates ?? {})) {
+        try { await getForecourtConfigStore().updateProductPrice(productId, { ...rate, marketReferencePrice: rate.sellingPricePerLitre }); } catch { /* Snapshot-only custom test data. */ }
+      }
       return clone(updated);
     },
 

@@ -148,6 +148,12 @@ export function reconcileShift(
     const litres = Decimal.sum(0, ...nozzleIds.map((id) => nozzleResults[id]?.customerSalesVolume ?? "0"));
     const expected = Decimal.sum(0, ...nozzleIds.map((id) => nozzleResults[id]?.revenue ?? "0"));
     const accounted = Decimal.sum(collection.cash, collection.upi, collection.card, collection.credit, collection.other);
+    const sideProducts = new Map<string, { productId: string; productName: string; litres: Decimal; revenue: Decimal; cost: Decimal }>();
+    for (const station of stations) {
+      const nozzle = nozzleResults[station.stationId]; if (!nozzle) continue;
+      const current = sideProducts.get(station.productId) ?? { productId: station.productId, productName: station.productName, litres: new Decimal(0), revenue: new Decimal(0), cost: new Decimal(0) };
+      current.litres = current.litres.plus(nozzle.customerSalesVolume); current.revenue = current.revenue.plus(nozzle.revenue); current.cost = current.cost.plus(new Decimal(nozzle.customerSalesVolume).times(station.costPerLitre)); sideProducts.set(station.productId, current);
+    }
     sides.push({
       sideId,
       sideLabel: stations[0].sideLabel ?? sideId,
@@ -166,7 +172,8 @@ export function reconcileShift(
       accountedTender: accounted.toDecimalPlaces(2).toFixed(2),
       tenderVariance: accounted.minus(expected).toDecimalPlaces(2).toFixed(2),
       declaredCashHandover: new Decimal(collection.declaredCashHandover).toDecimalPlaces(2).toFixed(2),
-      cashVariance: new Decimal(collection.declaredCashHandover).minus(collection.cash).toDecimalPlaces(2).toFixed(2)
+      cashVariance: new Decimal(collection.declaredCashHandover).minus(collection.cash).toDecimalPlaces(2).toFixed(2),
+      products: [...sideProducts.values()].map((product) => ({ productId: product.productId, productName: product.productName, litresSold: product.litres.toDecimalPlaces(3).toFixed(3), revenue: product.revenue.toDecimalPlaces(2).toFixed(2), grossProfit: product.revenue.minus(product.cost).toDecimalPlaces(2).toFixed(2) }))
     });
   }
 

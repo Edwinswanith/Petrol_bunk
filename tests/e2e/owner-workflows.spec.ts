@@ -92,27 +92,27 @@ test("owner can configure a custom product, tank and station", async ({ page }, 
   await expect(page.getByRole("heading", { name: /products, tanks & stations/i })).toBeVisible();
 
   const productForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add fuel product" }) });
-  await productForm.getByLabel("Code").fill(`XP95${suffix}`);
-  await productForm.getByLabel("Name").fill(`XP95 ${suffix}`);
+  await productForm.getByLabel("Code").fill(`ALT${suffix}`);
+  await productForm.getByLabel("Name").fill(`Alternate ${suffix}`);
   await productForm.getByLabel(/customer selling price/i).fill("110");
   await productForm.getByLabel(/reseller purchase price/i).fill("102");
   await productForm.getByRole("button", { name: /add product/i }).click();
-  await expect(page.getByRole("option", { name: `XP95 ${suffix} · ₹110` })).toBeAttached();
+  await expect(page.getByRole("option", { name: `Alternate ${suffix} · ₹110` })).toBeAttached();
 
   const tankForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add fuel tank" }) });
   await tankForm.getByLabel("Code").fill(`XT${suffix}`);
-  await tankForm.getByLabel("Name").fill(`XP95 Tank ${suffix}`);
-  await tankForm.getByLabel("Fuel product").selectOption({ label: `XP95 ${suffix}` });
+  await tankForm.getByLabel("Name").fill(`Alternate Tank ${suffix}`);
+  await tankForm.getByLabel("Fuel product").selectOption({ label: `Alternate ${suffix}` });
   await tankForm.getByLabel("Capacity").fill("10000");
   await tankForm.getByLabel("Opening stock").fill("5000");
   await tankForm.getByRole("button", { name: /add tank/i }).click();
-  await expect(page.getByRole("option", { name: new RegExp(`XP95 Tank ${suffix}`) })).toBeAttached();
+  await expect(page.getByRole("option", { name: new RegExp(`Alternate Tank ${suffix}`) })).toBeAttached();
 
   const stationForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add station" }) });
   await stationForm.getByLabel("Code").fill(`X${suffix}`);
-  await stationForm.getByLabel("Name").fill(`XP95 Station ${suffix}`);
-  await stationForm.getByLabel("Fuel product").selectOption({ label: `XP95 ${suffix}` });
-  await stationForm.getByLabel("Source tank").selectOption({ label: `XP95 Tank ${suffix} · XP95 ${suffix}` });
+  await stationForm.getByLabel("Name").fill(`Alternate Station ${suffix}`);
+  await stationForm.getByLabel("Fuel product").selectOption({ label: `Alternate ${suffix}` });
+  await stationForm.getByLabel("Source tank").selectOption({ label: `Alternate Tank ${suffix} · Alternate ${suffix}` });
   await stationForm.getByRole("button", { name: /add station/i }).click();
-  await expect(page.getByText(`XP95 Station ${suffix}`)).toBeVisible();
+  await expect(page.getByText(`Alternate Station ${suffix}`)).toBeVisible();
 });

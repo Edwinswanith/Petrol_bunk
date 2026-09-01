@@ -46,12 +46,19 @@ export const openShiftSchema = z.object({
   staffOnDuty: z.array(z.string().min(1).max(80)).max(50),
   staffAssignments: z.array(staffAssignmentSchema).max(100).default([]),
   openingNozzleReadings: z.record(z.string(), decimal),
-  openingTankStocks: z.record(z.string(), decimal)
+  openingTankStocks: z.record(z.string(), decimal),
+  stationOverrides: z.record(z.string(), z.object({ productId: z.string().min(1), tankId: z.string().min(1) })).optional()
 }).superRefine((shift, context) => {
   const nozzleIds = shift.staffAssignments.map((assignment) => assignment.nozzleId);
   if (new Set(nozzleIds).size !== nozzleIds.length) {
     context.addIssue({ code: "custom", path: ["staffAssignments"], message: "A machine can only have one staff member per shift" });
   }
+});
+
+export const activeShiftCorrectionSchema = z.object({
+  openingNozzleReadings: z.record(z.string(), decimal), staffAssignments: z.array(staffAssignmentSchema).min(1).max(100),
+  productRates: z.record(z.string(), z.object({ sellingPricePerLitre: decimal, costPricePerLitre: decimal })).optional(),
+  reason: z.string().trim().max(300).optional()
 });
 
 export const staffSchema = z.object({
@@ -71,6 +78,13 @@ export const attendanceSchema = z.object({
   checkOut: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
   note: z.string().trim().max(300).optional().default(""),
   shiftId: z.string().optional()
+});
+
+export const payrollSchema = z.object({
+  staffId: z.string().min(1), month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  halfDays: z.coerce.number().int().min(0).max(31).default(0), overtime: decimal.default("0"),
+  attendanceDeduction: decimal.default("0"), advances: decimal.default("0"), otherDeductions: decimal.default("0"),
+  amountPaid: decimal.default("0"), note: z.string().trim().max(500).default("")
 });
 
 export const expenseSchema = z.object({

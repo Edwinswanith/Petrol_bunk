@@ -59,6 +59,22 @@ export type OpenShiftInput = {
   tankSnapshots?: TankSnapshot[];
   openingNozzleReadings: Record<string, string>;
   openingTankStocks: Record<string, string>;
+  stationOverrides?: Record<string, { productId: string; tankId: string }>;
+};
+
+export type ActiveShiftCorrectionInput = {
+  openingNozzleReadings: Record<string, string>;
+  staffAssignments: StaffAssignment[];
+  productRates?: Record<string, { sellingPricePerLitre: string; costPricePerLitre: string }>;
+  reason?: string;
+};
+
+export type ShiftCorrection = {
+  id: string; correctedAt: string; reason: string;
+  previousOpeningNozzleReadings: Record<string, string>; revisedOpeningNozzleReadings: Record<string, string>;
+  previousStaffAssignments: StaffAssignment[]; revisedStaffAssignments: StaffAssignment[];
+  previousProductRates: Record<string, { sellingPricePerLitre: string; costPricePerLitre: string }>;
+  revisedProductRates: Record<string, { sellingPricePerLitre: string; costPricePerLitre: string }>;
 };
 
 export type CloseShiftInput = {
@@ -131,6 +147,7 @@ export type ShiftReconciliation = {
     tenderVariance: string;
     declaredCashHandover: string;
     cashVariance: string;
+    products: Array<{ productId: string; productName: string; litresSold: string; revenue: string; grossProfit: string }>;
   }>;
   grossMargin: string;
   estimatedOperatingProfit: string;
@@ -148,4 +165,5 @@ export type ShiftRecord = OpenShiftInput & {
   closingInput?: CloseShiftInput;
   reconciliation?: ShiftReconciliation;
   varianceExplanation?: string;
+  corrections?: ShiftCorrection[];
 };
