@@ -145,4 +145,56 @@ describe("MemoryOperationsRepository", () => {
     expect(updated.openingNozzleReadings.petrol_1).toBe("101");
     expect(updated.version).toBe(2);
   });
+
+  it("deducts aggregated station outflow from tank inventory once when a shift closes", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({
+      name: "Morning shift",
+      businessDate: "2026-09-01",
+      staffOnDuty: ["Arun"],
+      stationSnapshots: [
+        { stationId: "petrol_1", code: "P1", name: "Petrol 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95" },
+        { stationId: "petrol_2", code: "P2", name: "Petrol 2", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95" }
+      ],
+      tankSnapshots: [
+        { tankId: "petrol_tank", code: "PT1", name: "Petrol Tank", productId: "petrol", productName: "Petrol", capacityLitres: "20000" }
+      ],
+      openingNozzleReadings: { petrol_1: "1000", petrol_2: "2000" },
+      openingTankStocks: { petrol_tank: "5000" }
+    }, "inventory-open");
+    const input = {
+      closingNozzleReadings: { petrol_1: "1100", petrol_2: "2050" },
+      closingTankStocks: { petrol_tank: "4850" },
+      nonSaleDispenses: [],
+      receipts: { petrol_tank: "0" },
+      payments: { cashSales: "15000", upi: "0", card: "0", credit: "0", other: "0", cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "15000" },
+      lubricantRevenue: "0", lubricantCost: "0", expenses: "0"
+    };
+
+    await repository.closeShift(shift.id, input, "inventory-close");
+    await repository.closeShift(shift.id, input, "inventory-close");
+
+    expect(await repository.getTankBalances()).toEqual({ petrol_tank: "4850.000" });
+    const movements = (await repository.listInventoryMovements("petrol_tank")).filter((movement) => movement.type === "SHIFT_DISPENSE");
+    expect(movements).toHaveLength(1);
+    expect(movements[0]).toMatchObject({ type: "SHIFT_DISPENSE", quantity: "-150.000", referenceId: shift.id, balanceAfter: "4850.000" });
+  });
+
+  it("requires an explanation before closing a materially unbalanced shift", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({
+      name: "Morning shift", businessDate: "2026-09-01", staffOnDuty: [],
+      openingNozzleReadings: { petrol_1: "1000", diesel_1: "2000" },
+      openingTankStocks: { petrol_tank: "5000", diesel_tank: "6000" }
+    }, "variance-open");
+    await expect(repository.closeShift(shift.id, {
+      closingNozzleReadings: { petrol_1: "1100", diesel_1: "2000" },
+      closingTankStocks: { petrol_tank: "4890", diesel_tank: "6000" },
+      nonSaleDispenses: [], receipts: { petrol_tank: "0", diesel_tank: "0" },
+      payments: { cashSales: "10000", upi: "0", card: "0", credit: "0", other: "0", cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "10000" },
+      lubricantRevenue: "0", lubricantCost: "0", expenses: "0"
+    }, "variance-close")).rejects.toThrow("Explain the payment or tank variance before closing the shift");
+    expect((await repository.findShift(shift.id))?.state).toBe("OPEN");
+    expect(await repository.listInventoryMovements()).toHaveLength(0);
+  });
 });

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { listExpenses, listFuelReceipts } from "@/server/repositories/journal-store";
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
 import { buildDashboardViewModel } from "@/server/services/dashboard-service";
+import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 const lubricants = [
   { name: "Servo 4T 20W-40", pack: "1 L", stock: 18, reorder: 8, price: "₹420" },
@@ -15,12 +16,13 @@ const lubricants = [
 export const dynamic = "force-dynamic";
 
 export default async function StockPage() {
-  const [shifts, expenses, receipts] = await Promise.all([
+  const [shifts, expenses, receipts, configuration] = await Promise.all([
     getOperationsRepository().listShifts(),
     listExpenses(),
-    listFuelReceipts()
+    listFuelReceipts(),
+    getForecourtConfigStore().getConfiguration()
   ]);
-  const dashboard = buildDashboardViewModel({ shifts, expenses });
+  const dashboard = buildDashboardViewModel({ shifts, expenses, configuration });
   return (
     <main className="page">
       <PageHeader eyebrow="Physical inventory" title="Fuel & stock" description="Current tank position, quality checks and packaged inventory in one place." action={{ label: "Receive fuel", href: "/stock/receipts/new", icon: <Truck size={16} /> }} />
@@ -47,7 +49,7 @@ export default async function StockPage() {
       </section>
       <section className="panel panel-pad reveal reveal-4" style={{ marginTop: 16 }}>
         <div className="panel-header"><div><p className="panel-kicker">Delivery ledger</p><h2 className="panel-title">Recent fuel receipts</h2></div><Link className="button soft" href="/stock/receipts/new"><Plus size={14} /> Receive fuel</Link></div>
-        {receipts.length ? <table className="data-table"><thead><tr><th>Invoice</th><th>Product</th><th>Accepted</th><th>Density @15°C</th><th>Supplier</th></tr></thead><tbody>{receipts.slice(0, 12).map((receipt) => <tr key={receipt.id}><td><span className="table-title">{receipt.invoiceNumber}</span><span className="table-subtitle">{receipt.tankerNumber}</span></td><td>{receipt.product === "petrol" ? "Petrol" : "Diesel"}</td><td className="mono">{Number(receipt.acceptedQuantity).toLocaleString("en-IN")} L</td><td className="mono">{receipt.observedDensity}</td><td>{receipt.supplier}</td></tr>)}</tbody></table> : <p className="empty-state">No fuel receipt has been recorded yet.</p>}
+        {receipts.length ? <table className="data-table"><thead><tr><th>Invoice</th><th>Product</th><th>Accepted</th><th>Density @15°C</th><th>Supplier</th></tr></thead><tbody>{receipts.slice(0, 12).map((receipt) => <tr key={receipt.id}><td><span className="table-title">{receipt.invoiceNumber}</span><span className="table-subtitle">{receipt.tankerNumber}</span></td><td>{configuration.products.find((product) => product.id === receipt.product)?.name ?? receipt.product}</td><td className="mono">{Number(receipt.acceptedQuantity).toLocaleString("en-IN")} L</td><td className="mono">{receipt.observedDensity}</td><td>{receipt.supplier}</td></tr>)}</tbody></table> : <p className="empty-state">No fuel receipt has been recorded yet.</p>}
       </section>
     </main>
   );

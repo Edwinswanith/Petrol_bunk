@@ -25,11 +25,16 @@ export function apiError(error: unknown) {
     message === "Shift is already closed" ||
     message === "Close the active shift before opening another" ||
     message === "Closed shifts are immutable in v1" ||
-    message.startsWith("Shift changed on another device")
+    message.startsWith("Shift changed on another device") ||
+    message.startsWith("Tank stock changed while closing") ||
+    message.startsWith("Tank stock changed while opening")
   ) {
     return NextResponse.json({ error: message, code: "STATE_CONFLICT", requestId }, { status: 409 });
   }
   if (message.startsWith("Unknown nozzle:") || message.startsWith("Missing closing")) {
+    return NextResponse.json({ error: message, code: "COMMAND_FAILED", requestId }, { status: 400 });
+  }
+  if (message.includes("already exists") || message.startsWith("Unknown station:") || message.startsWith("Missing opening") || message.startsWith("Unknown assigned station:") || message.includes("product") || message.includes("tank")) {
     return NextResponse.json({ error: message, code: "COMMAND_FAILED", requestId }, { status: 400 });
   }
   return NextResponse.json(

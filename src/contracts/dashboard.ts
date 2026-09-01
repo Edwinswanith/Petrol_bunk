@@ -8,7 +8,7 @@ export type DashboardMetric = {
 export type TankSummary = {
   id: string;
   name: string;
-  product: "Petrol" | "Diesel";
+  product: string;
   litres: string;
   capacityLitres: string;
   percentage: number;

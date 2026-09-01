@@ -13,11 +13,34 @@ export type StaffAssignment = {
   nozzleId: string;
 };
 
+export type StationSnapshot = {
+  stationId: string;
+  code: string;
+  name: string;
+  productId: string;
+  productName: string;
+  tankId: string;
+  tankName: string;
+  pricePerLitre: string;
+  costPerLitre: string;
+};
+
+export type TankSnapshot = {
+  tankId: string;
+  code: string;
+  name: string;
+  productId: string;
+  productName: string;
+  capacityLitres: string;
+};
+
 export type OpenShiftInput = {
   name: string;
   businessDate: string;
   staffOnDuty: string[];
   staffAssignments?: StaffAssignment[];
+  stationSnapshots?: StationSnapshot[];
+  tankSnapshots?: TankSnapshot[];
   openingNozzleReadings: Record<string, string>;
   openingTankStocks: Record<string, string>;
 };
@@ -65,6 +88,12 @@ export type ShiftReconciliation = {
     expectedSalesValue: string;
     declaredHandover: string;
     handoverVariance: string;
+  }>;
+  products?: Array<{
+    productId: string;
+    productName: string;
+    litresSold: string;
+    revenue: string;
   }>;
   grossMargin: string;
   estimatedOperatingProfit: string;

@@ -40,16 +40,12 @@ const staffAssignmentSchema = z.object({
 export const openShiftSchema = z.object({
   name: z.string().min(2).max(80),
   businessDate: z.string().date(),
-  staffOnDuty: z.array(z.string().min(1).max(80)).max(12),
-  staffAssignments: z.array(staffAssignmentSchema).max(12).default([]),
+  staffOnDuty: z.array(z.string().min(1).max(80)).max(50),
+  staffAssignments: z.array(staffAssignmentSchema).max(100).default([]),
   openingNozzleReadings: z.record(z.string(), decimal),
   openingTankStocks: z.record(z.string(), decimal)
 }).superRefine((shift, context) => {
-  const staffIds = shift.staffAssignments.map((assignment) => assignment.staffId);
   const nozzleIds = shift.staffAssignments.map((assignment) => assignment.nozzleId);
-  if (new Set(staffIds).size !== staffIds.length) {
-    context.addIssue({ code: "custom", path: ["staffAssignments"], message: "A staff member can only be assigned to one machine per shift" });
-  }
   if (new Set(nozzleIds).size !== nozzleIds.length) {
     context.addIssue({ code: "custom", path: ["staffAssignments"], message: "A machine can only have one staff member per shift" });
   }
@@ -83,19 +79,39 @@ export const fuelReceiptSchema = z.object({
   supplier: z.string().min(2).max(120),
   invoiceNumber: z.string().min(2).max(80),
   tankerNumber: z.string().min(2).max(80),
-  product: z.enum(["petrol", "diesel"]),
-  tankId: z.enum(["petrol_tank", "diesel_tank"]),
+  product: z.string().min(1).max(100),
+  tankId: z.string().min(1).max(100),
   invoiceQuantity: decimal,
   acceptedQuantity: decimal,
   invoiceDensity: decimal,
   observedDensity: decimal,
   landedCost: decimal,
   note: z.string().max(500).optional()
-}).superRefine((receipt, context) => {
-  const expectedTank = receipt.product === "petrol" ? "petrol_tank" : "diesel_tank";
-  if (receipt.tankId !== expectedTank) {
-    context.addIssue({ code: "custom", path: ["tankId"], message: "Product does not match the selected tank" });
-  }
+});
+
+export const fuelProductSchema = z.object({
+  code: z.string().trim().min(1).max(20),
+  name: z.string().trim().min(2).max(80),
+  sellingPricePerLitre: decimal,
+  costPricePerLitre: decimal
+});
+
+export const fuelPriceSchema = fuelProductSchema.pick({ sellingPricePerLitre: true, costPricePerLitre: true });
+
+export const fuelTankSchema = z.object({
+  code: z.string().trim().min(1).max(20),
+  name: z.string().trim().min(2).max(80),
+  productId: z.string().min(1).max(100),
+  capacityLitres: decimal,
+  currentStock: decimal
+});
+
+export const fuelStationSchema = z.object({
+  code: z.string().trim().min(1).max(20),
+  name: z.string().trim().min(2).max(80),
+  productId: z.string().min(1).max(100),
+  tankId: z.string().min(1).max(100),
+  totalizerPrecision: z.number().int().min(0).max(3).default(3)
 });
 
 export const densityCheckSchema = z.object({

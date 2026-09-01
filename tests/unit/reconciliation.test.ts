@@ -270,4 +270,54 @@ describe("staff machine reconciliation", () => {
       }
     ]);
   });
+
+  it("uses the shift station snapshot for configurable products and aggregates stations sharing a tank", () => {
+    const shift: ShiftRecord = {
+      id: "shift-xp95",
+      state: "OPEN",
+      name: "Morning shift",
+      businessDate: "2026-09-01",
+      staffOnDuty: ["Arun"],
+      staffAssignments: [
+        { staffId: "staff-arun", staffName: "Arun", nozzleId: "xp95_1" },
+        { staffId: "staff-arun", staffName: "Arun", nozzleId: "xp95_2" }
+      ],
+      stationSnapshots: [
+        { stationId: "xp95_1", code: "X1", name: "XP95 station 1", productId: "xp95", productName: "XP95", tankId: "xp95_tank", tankName: "XP95 Tank", pricePerLitre: "110", costPerLitre: "102" },
+        { stationId: "xp95_2", code: "X2", name: "XP95 station 2", productId: "xp95", productName: "XP95", tankId: "xp95_tank", tankName: "XP95 Tank", pricePerLitre: "110", costPerLitre: "102" }
+      ],
+      tankSnapshots: [
+        { tankId: "xp95_tank", code: "XT1", name: "XP95 Tank", productId: "xp95", productName: "XP95", capacityLitres: "10000" }
+      ],
+      openingNozzleReadings: { xp95_1: "1000", xp95_2: "500" },
+      openingTankStocks: { xp95_tank: "5000" },
+      createdAt: "2026-09-01T03:30:00.000Z",
+      startedAt: "2026-09-01T03:30:00.000Z",
+      version: 1
+    };
+    const input: CloseShiftInput = {
+      closingNozzleReadings: { xp95_1: "1100", xp95_2: "550" },
+      closingTankStocks: { xp95_tank: "4850" },
+      nonSaleDispenses: [],
+      receipts: { xp95_tank: "0" },
+      payments: {
+        cashSales: "16500", upi: "0", card: "0", credit: "0", other: "0",
+        cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "16500"
+      },
+      lubricantRevenue: "0",
+      lubricantCost: "0",
+      expenses: "0"
+    };
+
+    const result = reconcileShift(shift, input);
+
+    expect(result.sales.expectedSales).toBe("16500.00");
+    expect(result.tanks.xp95_tank.expectedClosingStock).toBe("4850.000");
+    expect(result.products).toEqual([
+      { productId: "xp95", productName: "XP95", litresSold: "150.000", revenue: "16500.00" }
+    ]);
+    expect(result.staff).toEqual([
+      expect.objectContaining({ staffId: "staff-arun", litresSold: "150.000", expectedSalesValue: "16500.00", declaredHandover: "0.00", handoverVariance: "-16500.00" })
+    ]);
+  });
 });

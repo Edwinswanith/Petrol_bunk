@@ -7,7 +7,7 @@ test("owner can move through the core operating views", async ({ page }) => {
   await expect(page.getByText("Enter and review today’s forecourt operations.")).toBeVisible();
   await expect(page.getByText("Owner workspace")).toHaveCount(1);
   await expect(page.getByText("Swanith Fuels")).toHaveCount(0);
-  await expect(page.getByText("₹5,42,850")).toBeVisible();
+  await expect(page.getByText("Sales today")).toBeVisible();
 
   await page.getByRole("link", { name: "Stock" }).first().click();
   await expect(page).toHaveURL(/\/stock$/);
@@ -24,14 +24,20 @@ test("owner can review a shift reconciliation", async ({ page, request }) => {
   await page.goto(`/shifts/${active.id}`);
 
   await expect(page.getByRole("heading", { name: "Evening shift" })).toBeVisible();
-  await page.getByLabel(/petrol closing meter/i).fill((Number(active.openingNozzleReadings.petrol_1) + 100).toFixed(3));
-  await page.getByLabel(/diesel closing meter/i).fill((Number(active.openingNozzleReadings.diesel_1) + 100).toFixed(3));
-  await page.getByLabel(/cash sales/i).fill("10000");
-  await page.locator('input[name="upi"]').fill("10300");
-  await page.getByLabel(/declared cash handover/i).fill("10000");
+  const stations = active.stationSnapshots ?? [
+    { stationId: "petrol_1", code: "P1", productName: "Petrol", pricePerLitre: "102.50" },
+    { stationId: "diesel_1", code: "D1", productName: "Diesel", pricePerLitre: "100.50" }
+  ];
+  for (const station of stations) {
+    await page.locator(`input[name="closing-${station.stationId}"]`).fill((Number(active.openingNozzleReadings[station.stationId]) + 100).toFixed(3));
+  }
+  const expected = stations.reduce((total: number, station: { pricePerLitre: string }) => total + Number(station.pricePerLitre) * 100, 0);
+  await page.getByLabel(/cash sales/i).fill(expected.toFixed(2));
+  await page.locator('input[name="upi"]').fill("0");
+  await page.getByLabel(/declared cash handover/i).fill(expected.toFixed(2));
   await page.getByRole("button", { name: /review reconciliation/i }).click();
 
-  await expect(page.getByText("₹20,300.00")).toBeVisible();
+  await expect(page.getByText(new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(expected))).toBeVisible();
   await expect(page.getByText("No payment variance")).toBeVisible();
 });
 
@@ -78,4 +84,35 @@ test("health and daily export are available", async ({ page, request }) => {
   await page.getByRole("link", { name: /download csv/i }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^forecourt-\d{4}-\d{2}-\d{2}\.csv$/);
+});
+
+test("owner can configure a custom product, tank and station", async ({ page }, testInfo) => {
+  const suffix = testInfo.project.name === "mobile" ? "M" : "D";
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: /products, tanks & stations/i })).toBeVisible();
+
+  const productForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add fuel product" }) });
+  await productForm.getByLabel("Code").fill(`XP95${suffix}`);
+  await productForm.getByLabel("Name").fill(`XP95 ${suffix}`);
+  await productForm.getByLabel(/selling price/i).fill("110");
+  await productForm.getByLabel(/cost price/i).fill("102");
+  await productForm.getByRole("button", { name: /add product/i }).click();
+  await expect(page.getByRole("option", { name: `XP95 ${suffix} · ₹110` })).toBeAttached();
+
+  const tankForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add fuel tank" }) });
+  await tankForm.getByLabel("Code").fill(`XT${suffix}`);
+  await tankForm.getByLabel("Name").fill(`XP95 Tank ${suffix}`);
+  await tankForm.getByLabel("Fuel product").selectOption({ label: `XP95 ${suffix}` });
+  await tankForm.getByLabel("Capacity").fill("10000");
+  await tankForm.getByLabel("Opening stock").fill("5000");
+  await tankForm.getByRole("button", { name: /add tank/i }).click();
+  await expect(page.getByRole("option", { name: new RegExp(`XP95 Tank ${suffix}`) })).toBeAttached();
+
+  const stationForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add station" }) });
+  await stationForm.getByLabel("Code").fill(`X${suffix}`);
+  await stationForm.getByLabel("Name").fill(`XP95 Station ${suffix}`);
+  await stationForm.getByLabel("Fuel product").selectOption({ label: `XP95 ${suffix}` });
+  await stationForm.getByLabel("Source tank").selectOption({ label: `XP95 Tank ${suffix} · XP95 ${suffix}` });
+  await stationForm.getByRole("button", { name: /add station/i }).click();
+  await expect(page.getByText(`XP95 Station ${suffix}`)).toBeVisible();
 });

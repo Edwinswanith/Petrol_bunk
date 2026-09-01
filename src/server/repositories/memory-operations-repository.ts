@@ -3,7 +3,10 @@ import type {
   OpenShiftInput,
   ShiftRecord
 } from "@/server/domain/operations";
-import { reconcileShift } from "@/server/services/shift-reconciliation-service";
+import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
+import Decimal from "decimal.js";
+import type { InventoryMovement } from "@/server/domain/forecourt";
+import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -74,12 +77,15 @@ function createLiveDemoShift(): ShiftRecord {
 export function createMemoryOperationsRepository(options: { seedDemoData: boolean }) {
   const shifts = new Map<string, ShiftRecord>();
   const idempotency = new Map<string, ShiftRecord>();
+  const tankBalances = new Map<string, string>();
+  const inventoryMovements: InventoryMovement[] = [];
 
   if (options.seedDemoData) {
     const closed = createClosedDemoShift();
     const live = createLiveDemoShift();
     shifts.set(closed.id, closed);
     shifts.set(live.id, live);
+    for (const [tankId, stock] of Object.entries(live.openingTankStocks)) tankBalances.set(tankId, stock);
   }
 
   return {
@@ -111,6 +117,18 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
         version: 1
       };
       shifts.set(shift.id, shift);
+      for (const [tankId, stock] of Object.entries(shift.openingTankStocks)) {
+        tankBalances.set(tankId, stock);
+        if (shift.stationSnapshots?.length) {
+          const store = getForecourtConfigStore();
+          const configuredTank = (await store.getConfiguration()).tanks.find((tank) => tank.id === tankId);
+          if (configuredTank && !new Decimal(configuredTank.currentStock).equals(stock)) {
+            const normalizedStock = new Decimal(stock).toDecimalPlaces(3).toFixed(3);
+            inventoryMovements.push({ id: crypto.randomUUID(), tankId, productId: configuredTank.productId, type: "ADJUSTMENT", quantity: new Decimal(stock).minus(configuredTank.currentStock).toDecimalPlaces(3).toFixed(3), balanceAfter: normalizedStock, referenceId: shift.id, referenceLabel: `${shift.name} opening stock correction`, businessDate: shift.businessDate, createdAt: now });
+            await store.setTankStock(tankId, normalizedStock);
+          }
+        }
+      }
       idempotency.set(cacheKey, shift);
       return clone(shift);
     },
@@ -131,6 +149,7 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       }
 
       const reconciliation = reconcileShift(shift, input);
+      requireVarianceExplanation(reconciliation, input.varianceExplanation);
       const closed: ShiftRecord = {
         ...shift,
         state: "CLOSED",
@@ -142,6 +161,23 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
         reconciliation,
         varianceExplanation: input.varianceExplanation
       };
+      const stationById = new Map(shift.stationSnapshots?.map((station) => [station.stationId, station]) ?? []);
+      for (const [tankId, tank] of Object.entries(reconciliation.tanks)) {
+        const outflow = Decimal.sum(0, ...Object.entries(reconciliation.nozzles)
+          .filter(([stationId]) => (stationById.get(stationId)?.tankId ?? (stationId.startsWith("petrol") ? "petrol_tank" : "diesel_tank")) === tankId)
+          .map(([, nozzle]) => nozzle.expectedTankOutflow));
+        const tankSnapshot = shift.tankSnapshots?.find((entry) => entry.tankId === tankId);
+        inventoryMovements.push({
+          id: crypto.randomUUID(), tankId, productId: tankSnapshot?.productId ?? tankId.replace(/_tank$/, ""),
+          type: "SHIFT_DISPENSE", quantity: outflow.negated().toDecimalPlaces(3).toFixed(3),
+          balanceAfter: tank.expectedClosingStock, referenceId: shift.id,
+          referenceLabel: `${shift.name} station dispensing`, businessDate: shift.businessDate,
+          createdAt: closed.closedAt!
+        });
+        tankBalances.set(tankId, tank.expectedClosingStock);
+        const configuredTank = (await getForecourtConfigStore().getConfiguration()).tanks.find((entry) => entry.id === tankId);
+        if (configuredTank) await getForecourtConfigStore().setTankStock(tankId, tank.expectedClosingStock);
+      }
       shifts.set(id, closed);
       idempotency.set(cacheKey, closed);
       return clone(closed);
@@ -160,6 +196,15 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       };
       shifts.set(id, updated);
       return clone(updated);
+    },
+
+    async getTankBalances() {
+      return Object.fromEntries(tankBalances);
+    },
+
+    async listInventoryMovements(tankId?: string) {
+      const movements = [...inventoryMovements, ...(globalThis.forecourtReceiptInventoryMovements ?? [])];
+      return clone(movements.filter((movement) => !tankId || movement.tankId === tankId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
     }
   };
 }

@@ -3,9 +3,21 @@
 import { CheckCircle2, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
+import type { FuelProduct, FuelTank } from "@/server/domain/forecourt";
 
-export function FuelReceiptForm() {
-  const [product, setProduct] = useState<"petrol" | "diesel">("petrol");
+const fallbackProducts: FuelProduct[] = [
+  { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80", active: true, createdAt: "", updatedAt: "" },
+  { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40", active: true, createdAt: "", updatedAt: "" }
+];
+const fallbackTanks: FuelTank[] = [
+  { id: "petrol_tank", code: "PT1", name: "Petrol Tank 1", productId: "petrol", capacityLitres: "20000", currentStock: "0", active: true, createdAt: "", updatedAt: "" },
+  { id: "diesel_tank", code: "DT1", name: "Diesel Tank 1", productId: "diesel", capacityLitres: "20000", currentStock: "0", active: true, createdAt: "", updatedAt: "" }
+];
+
+export function FuelReceiptForm({ products = fallbackProducts, tanks = fallbackTanks }: { products?: FuelProduct[]; tanks?: FuelTank[] }) {
+  const activeProducts = products.filter((item) => item.active);
+  const [product, setProduct] = useState(activeProducts[0]?.id ?? "");
+  const productTanks = tanks.filter((tank) => tank.active && tank.productId === product);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -42,13 +54,13 @@ export function FuelReceiptForm() {
           <label className="field"><span>Supplier / OMC</span><input defaultValue="IndianOil" name="supplier" required /></label>
           <label className="field"><span>Invoice number</span><input name="invoiceNumber" placeholder="INV-2026-" required /></label>
           <label className="field"><span>Tanker number</span><input name="tankerNumber" placeholder="TN 00 AB 0000" required /></label>
-          <label className="field"><span>Product</span><select name="product" onChange={(event) => setProduct(event.target.value as "petrol" | "diesel")} value={product}><option value="petrol">Petrol</option><option value="diesel">Diesel</option></select></label>
+          <label className="field"><span>Product</span><select name="product" onChange={(event) => setProduct(event.target.value)} value={product}>{activeProducts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         </div>
       </section>
       <section className="form-section">
         <div className="form-section-heading"><span className="step-number">2</span><div><h2>Quantity and quality</h2><p>Record the accepted movement and its delivery quality evidence.</p></div></div>
         <div className="form-grid three">
-          <label className="field"><span>Target tank</span><select disabled value={product === "petrol" ? "petrol_tank" : "diesel_tank"}><option value="petrol_tank">Tank P1</option><option value="diesel_tank">Tank D1</option></select><input name="tankId" type="hidden" value={product === "petrol" ? "petrol_tank" : "diesel_tank"} /></label>
+          <label className="field"><span>Target tank</span><select name="tankId" required>{productTanks.map((tank) => <option key={tank.id} value={tank.id}>{tank.name} · {tank.currentStock} L available</option>)}</select></label>
           <label className="field"><span>Invoice quantity</span><span className="input-wrap"><input min="0.001" name="invoiceQuantity" required step="0.001" type="number" /><span className="unit">L</span></span></label>
           <label className="field"><span>Accepted quantity</span><span className="input-wrap"><input min="0.001" name="acceptedQuantity" required step="0.001" type="number" /><span className="unit">L</span></span></label>
           <label className="field"><span>Invoice density @15°C</span><input min="0.001" name="invoiceDensity" required step="0.001" type="number" /></label>

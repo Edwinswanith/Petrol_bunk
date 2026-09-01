@@ -9,6 +9,7 @@ import {
 } from "@/lib/business-time";
 import type { ShiftRecord } from "@/server/domain/operations";
 import type { ExpenseRecord } from "@/server/repositories/journal-store";
+import type { ForecourtConfiguration, FuelProduct, FuelTank } from "@/server/domain/forecourt";
 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -22,21 +23,22 @@ function sum(values: Array<string | undefined>): Decimal {
 }
 
 function tankSummary(
-  id: "petrol_tank" | "diesel_tank",
+  tank: Pick<FuelTank, "id" | "name" | "capacityLitres">,
+  product: Pick<FuelProduct, "name">,
   stock: string,
   dailyOutflow: Decimal
 ): TankSummary {
-  const capacity = new Decimal(20000);
+  const capacity = new Decimal(tank.capacityLitres);
   const available = new Decimal(stock || "0");
   const percentage = Math.max(0, Math.min(100, available.div(capacity).times(100).round().toNumber()));
   const status = percentage <= 20 ? "critical" : percentage <= 45 ? "watch" : "healthy";
   const days = dailyOutflow.isZero() ? "No sales rate" : `${available.div(dailyOutflow).toDecimalPlaces(1)} days`;
   return {
-    id,
-    name: id === "petrol_tank" ? "Tank P1" : "Tank D1",
-    product: id === "petrol_tank" ? "Petrol" : "Diesel",
+    id: tank.id,
+    name: tank.name,
+    product: product.name,
     litres: `${quantity.format(available.toNumber())} L`,
-    capacityLitres: "20,000 L",
+    capacityLitres: `${quantity.format(capacity.toNumber())} L`,
     percentage,
     daysRemaining: days,
     status
@@ -46,6 +48,7 @@ function tankSummary(
 export function buildDashboardViewModel(input: {
   shifts: ShiftRecord[];
   expenses: ExpenseRecord[];
+  configuration?: ForecourtConfiguration;
   now?: Date;
 }): DashboardViewModel {
   const now = input.now ?? new Date();
@@ -61,19 +64,31 @@ export function buildDashboardViewModel(input: {
   const expenses = sum(todayExpenses.map((expense) => expense.amount));
   const operatingProfit = grossMargin.minus(expenses);
 
-  const petrolSold = sum(closed.map((shift) => shift.reconciliation?.nozzles.petrol_1?.customerSalesVolume));
-  const dieselSold = sum(closed.map((shift) => shift.reconciliation?.nozzles.diesel_1?.customerSalesVolume));
-  const totalSold = petrolSold.plus(dieselSold);
+  const productSales = new Map<string, { name: string; litres: Decimal }>();
+  if (input.configuration) {
+    for (const product of input.configuration.products.filter((item) => item.active)) {
+      const litres = sum(closed.flatMap((shift) => shift.reconciliation?.products?.filter((item) => item.productId === product.id).map((item) => item.litresSold) ?? []));
+      productSales.set(product.id, { name: product.name, litres });
+    }
+  } else {
+    productSales.set("petrol", { name: "Petrol", litres: sum(closed.map((shift) => shift.reconciliation?.nozzles.petrol_1?.customerSalesVolume)) });
+    productSales.set("diesel", { name: "Diesel", litres: sum(closed.map((shift) => shift.reconciliation?.nozzles.diesel_1?.customerSalesVolume)) });
+  }
+  const totalSold = Decimal.sum(0, ...[...productSales.values()].map((entry) => entry.litres));
   const percentOfTotal = (value: Decimal) => totalSold.isZero() ? 0 : value.div(totalSold).times(100).round().toNumber();
 
-  const recordedStock = active?.openingTankStocks ?? latestClosed?.closingTankStocks ?? {
+  const recordedStock = input.configuration ? Object.fromEntries(input.configuration.tanks.map((tank) => [tank.id, tank.currentStock])) : active?.openingTankStocks ?? latestClosed?.closingTankStocks ?? {
     petrol_tank: "0",
     diesel_tank: "0"
   };
-  const tanks = [
-    tankSummary("petrol_tank", recordedStock.petrol_tank ?? "0", petrolSold),
-    tankSummary("diesel_tank", recordedStock.diesel_tank ?? "0", dieselSold)
+  const configuredTanks = input.configuration?.tanks.filter((tank) => tank.active) ?? [
+    { id: "petrol_tank", name: "Tank P1", productId: "petrol", capacityLitres: "20000" },
+    { id: "diesel_tank", name: "Tank D1", productId: "diesel", capacityLitres: "20000" }
   ];
+  const productLookup = new Map((input.configuration?.products ?? [
+    { id: "petrol", name: "Petrol" }, { id: "diesel", name: "Diesel" }
+  ]).map((product) => [product.id, product]));
+  const tanks = configuredTanks.map((tank) => tankSummary(tank, productLookup.get(tank.productId) ?? { name: "Fuel" }, recordedStock[tank.id] ?? "0", productSales.get(tank.productId)?.litres ?? new Decimal(0)));
 
   const paymentAmounts = {
     Cash: sum(closed.map((shift) => shift.closingInput?.payments.cashSales)),
@@ -122,10 +137,7 @@ export function buildDashboardViewModel(input: {
       completion: 50
     } : null,
     tanks,
-    fuelSold: [
-      { product: "Petrol", litres: `${quantity.format(petrolSold.toNumber())} L`, percentage: percentOfTotal(petrolSold) },
-      { product: "Diesel", litres: `${quantity.format(dieselSold.toNumber())} L`, percentage: percentOfTotal(dieselSold) }
-    ],
+    fuelSold: [...productSales.values()].map((product) => ({ product: product.name, litres: `${quantity.format(product.litres.toNumber())} L`, percentage: percentOfTotal(product.litres) })),
     paymentMix: Object.entries(paymentAmounts).map(([method, amount]) => ({
       method,
       amount: inr.format(amount.toNumber()),

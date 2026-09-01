@@ -5,7 +5,8 @@ import { getStaffStore } from "@/server/repositories/staff-store";
 export async function markAssignedStaffPresent(shift: ShiftRecord) {
   const store = getStaffStore();
   const existing = await store.listAttendance(shift.businessDate);
-  await Promise.all((shift.staffAssignments ?? []).map((assignment) => {
+  const assignments = [...new Map((shift.staffAssignments ?? []).map((assignment) => [assignment.staffId, assignment])).values()];
+  await Promise.all(assignments.map((assignment) => {
     const current = existing.find((record) => record.staffId === assignment.staffId);
     return store.saveAttendance({
       staffId: assignment.staffId,
@@ -22,7 +23,8 @@ export async function markAssignedStaffPresent(shift: ShiftRecord) {
 export async function markAssignedStaffCheckedOut(shift: ShiftRecord) {
   const store = getStaffStore();
   const existing = await store.listAttendance(shift.businessDate);
-  await Promise.all((shift.staffAssignments ?? []).map((assignment) => {
+  const assignments = [...new Map((shift.staffAssignments ?? []).map((assignment) => [assignment.staffId, assignment])).values()];
+  await Promise.all(assignments.map((assignment) => {
     const current = existing.find((record) => record.staffId === assignment.staffId);
     return store.saveAttendance({
       staffId: assignment.staffId,

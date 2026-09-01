@@ -22,14 +22,14 @@ describe("shift staff assignments", () => {
     expect(parsed.staffAssignments).toHaveLength(2);
   });
 
-  it("rejects assigning the same staff or machine twice", () => {
-    expect(() => openShiftSchema.parse({
+  it("allows one staff member to operate multiple machines but keeps each machine unique", () => {
+    expect(openShiftSchema.parse({
       ...baseShift,
       staffAssignments: [
         { staffId: "staff-arun", staffName: "Arun", nozzleId: "petrol_1" },
         { staffId: "staff-arun", staffName: "Arun", nozzleId: "diesel_1" }
       ]
-    })).toThrow();
+    }).staffAssignments).toHaveLength(2);
     expect(() => openShiftSchema.parse({
       ...baseShift,
       staffAssignments: [

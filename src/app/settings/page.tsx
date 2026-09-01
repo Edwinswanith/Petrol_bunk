@@ -1,7 +1,10 @@
-import { ShieldCheck } from "lucide-react";
-
+import { ForecourtSetup } from "@/components/settings/forecourt-setup";
 import { PageHeader } from "@/components/ui/page-header";
+import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
-export default function SettingsPage() {
-  return <main className="page"><PageHeader eyebrow="Single-owner workspace" title="Operating settings" description="The first version is intentionally fixed, simple, and entered manually by the owner." /><div className="two-column reveal reveal-2"><section className="panel panel-pad"><div className="panel-header"><div><p className="panel-kicker">Current configuration</p><h2 className="panel-title">Forecourt operations</h2></div><span className="status-pill healthy">Active</span></div><div className="form-grid"><label className="field"><span>Business date timezone</span><input defaultValue="Asia/Kolkata" disabled /></label><label className="field"><span>Currency</span><input defaultValue="INR · ₹" disabled /></label><label className="field"><span>Fuel setup</span><input defaultValue="1 petrol + 1 diesel nozzle" disabled /></label><label className="field"><span>Tank setup</span><input defaultValue="P1 20 KL + D1 20 KL" disabled /></label></div><p className="page-description small" style={{ marginTop: 16 }}>Operational configuration is fixed in v1 so an accidental change cannot alter reconciliation results.</p></section><aside className="panel panel-pad"><div className="panel-header"><div><p className="panel-kicker">Usage model</p><h2 className="panel-title">Owner-entered records</h2></div><ShieldCheck color="#0d6b5d" size={20} /></div><p className="page-description small">There are no accounts, email identity, sessions, invitations, roles, or approval queues. The owner enters and reviews every operational record directly.</p><div className="alert-card" style={{ marginTop: 18 }}><span className="alert-icon"><ShieldCheck size={15} /></span><span><strong>Closed-shift protection is active</strong><span>Closed records remain immutable in this first version.</span></span><span className="status-pill healthy">On</span></div></aside></div></main>;
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
+  const configuration = await getForecourtConfigStore().getConfiguration();
+  return <main className="page"><PageHeader eyebrow="Single-owner workspace" title="Products, tanks & stations" description="Configure every fuel grade, storage tank and independently metered station used in shift reconciliation." /><ForecourtSetup configuration={configuration} /></main>;
 }
