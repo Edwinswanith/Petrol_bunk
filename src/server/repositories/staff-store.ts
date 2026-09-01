@@ -1,9 +1,10 @@
 import { hasMongoConfiguration, getMongoDatabase } from "@/server/db/mongo-client";
-import type { AddStaffInput, AttendanceRecord, SaveAttendanceInput, StaffRecord } from "@/server/domain/staff";
+import type { AddStaffInput, AttendanceRecord, SaveAttendanceInput, StaffRecord, UpdateStaffInput } from "@/server/domain/staff";
 
 export type StaffStore = {
   listStaff(): Promise<StaffRecord[]>;
   addStaff(input: AddStaffInput): Promise<StaffRecord>;
+  updateStaff(id: string, input: UpdateStaffInput): Promise<StaffRecord>;
   listAttendance(businessDate?: string): Promise<AttendanceRecord[]>;
   saveAttendance(input: SaveAttendanceInput): Promise<AttendanceRecord>;
 };
@@ -15,7 +16,7 @@ export function createMemoryStaffStore() {
   const attendance = new Map<string, AttendanceRecord>();
   const store: StaffStore & { clear(): void } = {
     clear() { staff.clear(); attendance.clear(); },
-    async listStaff() { return [...staff.values()].sort((a, b) => a.name.localeCompare(b.name)).map(clone); },
+    async listStaff() { return [...staff.values()].sort((a, b) => a.name.localeCompare(b.name)).map((record) => clone({ ...record, monthlySalary: record.monthlySalary ?? "0" })); },
     async addStaff(input) {
       const existing = [...staff.values()].find((record) => record.name.toLowerCase() === input.name.toLowerCase());
       if (existing) return clone(existing);
@@ -23,6 +24,11 @@ export function createMemoryStaffStore() {
       const record: StaffRecord = { id: crypto.randomUUID(), ...clone(input), active: true, createdAt: now, updatedAt: now };
       staff.set(record.id, record);
       return clone(record);
+    },
+    async updateStaff(id, input) {
+      const current = staff.get(id); if (!current) throw new Error("Staff member not found");
+      const record = { ...current, ...clone(input), updatedAt: new Date().toISOString() };
+      staff.set(id, record); return clone(record);
     },
     async listAttendance(businessDate) {
       return [...attendance.values()].filter((record) => !businessDate || record.businessDate === businessDate)
@@ -55,7 +61,7 @@ function createMongoStaffStore(): StaffStore {
     async listStaff() {
       const db = await getMongoDatabase();
       await db.collection<StoredStaff>("staff").createIndex({ name: 1 }, { unique: true });
-      return (await db.collection<StoredStaff>("staff").find().sort({ name: 1 }).toArray()).map((record) => withoutId(record) as StaffRecord);
+      return (await db.collection<StoredStaff>("staff").find().sort({ name: 1 }).toArray()).map((record) => ({ ...(withoutId(record) as StaffRecord), monthlySalary: record.monthlySalary ?? "0" }));
     },
     async addStaff(input) {
       const db = await getMongoDatabase();
@@ -66,6 +72,12 @@ function createMongoStaffStore(): StaffStore {
       const record: StaffRecord = { id: crypto.randomUUID(), ...input, active: true, createdAt: now, updatedAt: now };
       await db.collection<StoredStaff>("staff").insertOne({ ...record, _id: record.id });
       return record;
+    },
+    async updateStaff(id, input) {
+      const db = await getMongoDatabase(); const now = new Date().toISOString();
+      const updated = await db.collection<StoredStaff>("staff").findOneAndUpdate({ _id: id }, { $set: { ...input, updatedAt: now } }, { returnDocument: "after" });
+      if (!updated) throw new Error("Staff member not found");
+      return { ...(withoutId(updated) as StaffRecord), monthlySalary: updated.monthlySalary ?? "0" };
     },
     async listAttendance(businessDate) {
       const db = await getMongoDatabase();

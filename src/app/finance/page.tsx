@@ -1,50 +1,46 @@
-import { ArrowRight, Banknote, ChartNoAxesCombined, Plus, ReceiptText, WalletCards } from "lucide-react";
-import Decimal from "decimal.js";
+import { Banknote, CalendarDays, ChartNoAxesCombined, CircleDollarSign, Fuel, Plus, ReceiptText, TrendingUp, UsersRound } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { businessDate } from "@/lib/business-time";
 import { listExpenses } from "@/server/repositories/journal-store";
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
+import { getStaffStore } from "@/server/repositories/staff-store";
+import { buildFinanceAnalytics } from "@/server/services/finance-analytics-service";
 
 export const dynamic = "force-dynamic";
 
-const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
-const categoryNames: Record<string, string> = {
-  maintenance: "Maintenance",
-  electricity: "Electricity",
-  salary: "Salary",
-  cleaning: "Cleaning",
-  bank_charges: "Bank charges",
-  other: "Other"
-};
+const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+const categoryNames: Record<string, string> = { maintenance: "Maintenance", electricity: "Electricity", salary: "Salary payment", cleaning: "Cleaning", bank_charges: "Bank charges", other: "Other" };
+const formatMoney = (value: string) => money.format(Number(value));
 
-export default async function FinancePage() {
-  const [expenses, shifts] = await Promise.all([
-    listExpenses(),
-    getOperationsRepository().listShifts()
-  ]);
-  const date = businessDate();
-  const todayExpenses = expenses.filter((expense) => expense.date === date);
-  const closed = shifts.filter((shift) => shift.businessDate === date && shift.reconciliation);
-  const latest = closed[0]?.reconciliation;
-  const expectedSales = Decimal.sum(0, ...closed.map((shift) => shift.reconciliation?.sales.expectedSales ?? "0"));
-  const accountedTender = Decimal.sum(0, ...closed.map((shift) => shift.reconciliation?.sales.accountedTender ?? "0"));
-  const expenseTotal = Decimal.sum(0, ...todayExpenses.map((expense) => expense.amount));
-  const grossMargin = Decimal.sum(0, ...closed.map((shift) => shift.reconciliation?.grossMargin ?? "0"));
-  const operatingProfit = grossMargin.minus(expenseTotal);
-  const tenderBalanced = expectedSales.equals(accountedTender);
+export default async function FinancePage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const requested = (await searchParams).month;
+  const month = requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : businessDate().slice(0, 7);
+  const [expenses, shifts, staff] = await Promise.all([listExpenses(), getOperationsRepository().listShifts(), getStaffStore().listStaff()]);
+  const analytics = buildFinanceAnalytics({ month, expenses, shifts, staff });
 
-  return (
-    <main className="page">
-      <PageHeader eyebrow="Collections and cost" title="Money & margin" description="Sales, tenders, expenses and management profit without accounting clutter." action={{ label: "Record expense", href: "/finance/expenses/new", icon: <Plus size={16} /> }} />
-      <section className="summary-strip reveal reveal-2"><div className="summary-cell"><span>Expected sales</span><strong>{money.format(expectedSales.toNumber())}</strong></div><div className="summary-cell"><span>Accounted tender</span><strong>{money.format(accountedTender.toNumber())}</strong></div><div className="summary-cell"><span>Expenses</span><strong>{money.format(expenseTotal.toNumber())}</strong></div><div className="summary-cell"><span>Est. operating profit</span><strong>{money.format(operatingProfit.toNumber())}</strong></div></section>
-      <div className="three-column reveal reveal-3">
-        <article className="panel feature-card"><span className="feature-icon"><WalletCards size={20} /></span><span><h2>Payment position</h2><p>{closed.length ? `${money.format(accountedTender.toNumber())} recorded against ${money.format(expectedSales.toNumber())} expected.` : "Close a shift to calculate the tender position."}</p></span><span className={`status-pill ${closed.length && tenderBalanced ? "healthy" : "closed"}`}>{closed.length ? tenderBalanced ? "Balanced" : "Variance" : "Awaiting close"}</span></article>
-        <article className="panel feature-card"><span className="feature-icon"><Banknote size={20} /></span><span><h2>Cash handover</h2><p>{latest ? `${money.format(Number(latest.sales.expectedCashHandover))} expected after cash-paid expenses.` : "No closed shift is available for a cash check."}</p></span><span className={`status-pill ${latest?.sales.cashVariance === "0.00" ? "healthy" : "closed"}`}>{latest ? latest.sales.cashVariance === "0.00" ? "Matches" : "Variance" : "Awaiting close"}</span></article>
-        <Link className="panel feature-card" href="/reports"><span className="feature-icon"><ChartNoAxesCombined size={20} /></span><span><h2>Margin report</h2><p>Weighted cost and recorded expenses produce a live management estimate.</p></span><span className="feature-link">Open report <ArrowRight size={14} /></span></Link>
-      </div>
-      <section className="panel panel-pad reveal reveal-4" style={{ marginTop: 16 }}><div className="panel-header"><div><p className="panel-kicker">Today</p><h2 className="panel-title">Expenses</h2></div><Link className="button soft" href="/finance/expenses/new"><ReceiptText size={14} /> Add expense</Link></div>{todayExpenses.length ? <table className="data-table"><thead><tr><th>Category</th><th>Note</th><th>Paid through</th><th>Amount</th></tr></thead><tbody>{todayExpenses.map((expense) => <tr key={expense.id}><td><span className="table-title">{categoryNames[expense.category]}</span></td><td>{expense.note}</td><td>{expense.paymentMethod.toUpperCase()}</td><td className="mono">{money.format(Number(expense.amount))}</td></tr>)}</tbody></table> : <p className="empty-state">No expenses recorded for this business day.</p>}</section>
-    </main>
-  );
+  return <main className="page finance-page">
+    <PageHeader eyebrow="Monthly business position" title="Finance & profitability" description="Daily sales, fuel margin, operating expenses, payroll commitment and staff contribution from closed forecourt records." action={{ label: "Record expense", href: "/finance/expenses/new", icon: <Plus size={16} /> }} />
+    <form className="month-command" method="GET"><span><CalendarDays size={18} /><label htmlFor="finance-month"><small>Reporting month</small><strong>Choose any month</strong></label></span><input defaultValue={month} id="finance-month" name="month" type="month" /><button className="button primary" type="submit">View month</button></form>
+
+    <section className="finance-scoreboard reveal reveal-2">
+      <article><span><CircleDollarSign size={18} />Revenue</span><strong>{formatMoney(analytics.summary.revenue)}</strong><small>Customer sales from closed days</small></article>
+      <article><span><TrendingUp size={18} />Fuel gross profit</span><strong>{formatMoney(analytics.summary.grossMargin)}</strong><small>Selling price less reseller cost</small></article>
+      <article><span><ReceiptText size={18} />Operating expenses</span><strong>{formatMoney(analytics.summary.nonSalaryExpenses)}</strong><small>Excludes salary payments</small></article>
+      <article><span><UsersRound size={18} />Salary budget</span><strong>{formatMoney(analytics.summary.salaryBudget)}</strong><small>{formatMoney(analytics.summary.recordedSalaryPayments)} recorded as paid</small></article>
+      <article className={Number(analytics.summary.estimatedNetProfit) < 0 ? "negative" : "positive"}><span><ChartNoAxesCombined size={18} />Estimated net profit</span><strong>{formatMoney(analytics.summary.estimatedNetProfit)}</strong><small>Gross profit − expenses − monthly salaries</small></article>
+    </section>
+
+    <section className="finance-grid reveal reveal-3">
+      <article className="panel panel-pad"><div className="panel-header"><div><p className="panel-kicker">Fuel economics</p><h2 className="panel-title">Profit by product</h2></div><Fuel size={19} color="#087665" /></div>{analytics.products.length ? <table className="data-table"><thead><tr><th>Product</th><th>Litres</th><th>Revenue</th><th>Reseller cost</th><th>Gross profit</th></tr></thead><tbody>{analytics.products.map((product) => <tr key={product.productId}><td><span className="table-title">{product.productName}</span></td><td className="mono">{product.litres} L</td><td className="mono">{formatMoney(product.revenue)}</td><td className="mono">{formatMoney(product.cost)}</td><td className="mono profit-value">{formatMoney(product.grossProfit)}</td></tr>)}</tbody></table> : <p className="empty-state">Close a business day in {month} to calculate product profit.</p>}</article>
+      <article className="panel panel-pad"><div className="panel-header"><div><p className="panel-kicker">Where money went</p><h2 className="panel-title">Expense breakdown</h2></div><ReceiptText size={19} color="#087665" /></div>{analytics.expenseCategories.length ? <div className="expense-breakdown">{analytics.expenseCategories.map((item) => <div key={item.category}><span><strong>{categoryNames[item.category] ?? item.category}</strong><small>{item.category === "salary" ? "Tracked against payroll" : "Operating expense"}</small></span><b>{formatMoney(item.amount)}</b></div>)}</div> : <p className="empty-state">No expenses recorded for this month.</p>}<Link className="button soft finance-add" href="/finance/expenses/new"><Plus size={14} />Add expense</Link></article>
+    </section>
+
+    <section className="panel panel-pad reveal reveal-4 finance-table-panel"><div className="panel-header"><div><p className="panel-kicker">Day-wise ledger</p><h2 className="panel-title">Daily profit position</h2></div><span className="status-pill healthy">{analytics.days.length} recorded days</span></div>{analytics.days.length ? <table className="data-table"><thead><tr><th>Business date</th><th>Closed shifts</th><th>Revenue</th><th>Fuel gross profit</th><th>Operating expenses</th><th>Salary paid</th><th>Profit before salary budget</th></tr></thead><tbody>{analytics.days.map((day) => <tr key={day.businessDate}><td><span className="table-title">{day.businessDate}</span></td><td>{day.shifts}</td><td className="mono">{formatMoney(day.revenue)}</td><td className="mono">{formatMoney(day.grossMargin)}</td><td className="mono">{formatMoney(day.expenses)}</td><td className="mono">{formatMoney(day.salaryPayments)}</td><td className={`mono ${Number(day.operatingProfitBeforeSalary) < 0 ? "loss-value" : "profit-value"}`}>{formatMoney(day.operatingProfitBeforeSalary)}</td></tr>)}</tbody></table> : <p className="empty-state">There are no sales or expenses for {month}.</p>}</section>
+
+    <section className="panel panel-pad reveal reveal-4 finance-table-panel"><div className="panel-header"><div><p className="panel-kicker">Totalizer-attributed performance</p><h2 className="panel-title">Employee contribution</h2></div><UsersRound size={19} color="#087665" /></div>{analytics.staff.length ? <table className="data-table"><thead><tr><th>Employee</th>{analytics.products.map((product) => <th key={product.productId}>{product.productName}</th>)}<th>Total litres</th><th>Revenue generated</th><th>Gross profit contributed</th></tr></thead><tbody>{analytics.staff.map((person) => <tr key={person.staffId}><td><span className="table-title">{person.staffName}</span></td>{analytics.products.map((product) => <td className="mono" key={product.productId}>{person.productLitres[product.productId] ?? "0.000"} L</td>)}<td className="mono">{person.litres} L</td><td className="mono">{formatMoney(person.revenue)}</td><td className="mono profit-value">{formatMoney(person.grossProfit)}</td></tr>)}</tbody></table> : <p className="empty-state">Employee contribution appears after a day with assigned operators is closed.</p>}<p className="finance-footnote">Every litre is attributed to the operator responsible for that nozzle side.</p></section>
+
+    <section className="panel panel-pad reveal reveal-4 finance-table-panel"><div className="panel-header"><div><p className="panel-kicker">Transaction detail</p><h2 className="panel-title">Expense ledger</h2></div><Banknote size={19} color="#087665" /></div>{analytics.expenses.length ? <table className="data-table"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Paid through</th><th>Amount</th></tr></thead><tbody>{analytics.expenses.map((expense) => <tr key={expense.id}><td>{expense.date}</td><td>{categoryNames[expense.category] ?? expense.category}</td><td>{expense.note}</td><td>{expense.paymentMethod.toUpperCase()}</td><td className="mono">{formatMoney(expense.amount)}</td></tr>)}</tbody></table> : <p className="empty-state">No expenses recorded for this month.</p>}</section>
+  </main>;
 }

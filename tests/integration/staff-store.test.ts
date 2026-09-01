@@ -8,7 +8,7 @@ describe("memory staff store", () => {
   beforeEach(() => store.clear());
 
   it("adds staff and updates one attendance record per business date", async () => {
-    const staff = await store.addStaff({ name: "Arun", phone: "9876543210", note: "Senior operator" });
+    const staff = await store.addStaff({ name: "Arun", phone: "9876543210", note: "Senior operator", monthlySalary: "18000" });
     await store.saveAttendance({
       staffId: staff.id,
       businessDate: "2026-08-31",
@@ -25,7 +25,8 @@ describe("memory staff store", () => {
       note: "Traffic"
     });
 
-    expect(await store.listStaff()).toEqual([expect.objectContaining({ name: "Arun", active: true })]);
+    await store.updateStaff(staff.id, { monthlySalary: "20000" });
+    expect(await store.listStaff()).toEqual([expect.objectContaining({ name: "Arun", monthlySalary: "20000", active: true })]);
     expect(await store.listAttendance("2026-08-31")).toEqual([
       expect.objectContaining({ staffName: "Arun", status: "LATE", checkIn: "06:15", checkOut: "14:10" })
     ]);

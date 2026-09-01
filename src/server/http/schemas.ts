@@ -57,8 +57,11 @@ export const openShiftSchema = z.object({
 export const staffSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(20).optional().default(""),
-  note: z.string().trim().max(300).optional().default("")
+  note: z.string().trim().max(300).optional().default(""),
+  monthlySalary: decimal.optional().default("0")
 });
+
+export const staffUpdateSchema = z.object({ monthlySalary: decimal });
 
 export const attendanceSchema = z.object({
   staffId: z.string().min(1),

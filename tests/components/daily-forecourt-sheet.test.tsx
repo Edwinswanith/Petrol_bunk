@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { DailyForecourtSheet } from "@/components/day/daily-forecourt-sheet";
@@ -18,10 +19,11 @@ const station = (pump: "A" | "B", nozzle: number) => {
 };
 
 describe("DailyForecourtSheet", () => {
-  it("shows two physical pumps, four staff positions and eight opening totalizers on one page", () => {
+  it("shows daily reseller/customer prices, operator dropdowns and independently editable opening totalizers", async () => {
+    const user = userEvent.setup();
     render(<DailyForecourtSheet
       businessDate="2026-09-01"
-      previousReadings={{}}
+      previousReadings={{ a_n1: "1000.000", a_n2: "2000.000" }}
       products={[
         { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80", marketReferencePrice: "102.50" },
         { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40", marketReferencePrice: "100.50" }
@@ -37,8 +39,15 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByRole("heading", { name: "Today's forecourt sheet" })).toBeInTheDocument();
     expect(screen.getByText("Pump A")).toBeInTheDocument();
     expect(screen.getByText("Pump B")).toBeInTheDocument();
+    expect(screen.getAllByRole("spinbutton", { name: /reseller purchase price/i })).toHaveLength(2);
+    expect(screen.getAllByRole("spinbutton", { name: /customer selling price/i })).toHaveLength(2);
     expect(screen.getAllByRole("combobox", { name: /operator/i })).toHaveLength(4);
-    expect(screen.getAllByPlaceholderText("Opening")).toHaveLength(8);
+    expect(screen.getAllByRole("spinbutton", { name: /opening totalizer/i })).toHaveLength(8);
+    const nozzleOne = screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" });
+    const nozzleTwo = screen.getByRole("spinbutton", { name: "A-N2 opening totalizer" });
+    expect(nozzleOne).toHaveValue(1000); expect(nozzleTwo).toHaveValue(2000);
+    await user.clear(nozzleOne); await user.type(nozzleOne, "1015.250");
+    expect(nozzleOne).toHaveValue(1015.25); expect(nozzleTwo).toHaveValue(2000);
     expect(screen.getByRole("button", { name: /start business day/i })).toBeEnabled();
   });
 });

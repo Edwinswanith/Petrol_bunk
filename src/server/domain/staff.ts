@@ -5,6 +5,7 @@ export type StaffRecord = {
   name: string;
   phone: string;
   note: string;
+  monthlySalary?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -24,6 +25,7 @@ export type AttendanceRecord = {
   updatedAt: string;
 };
 
-export type AddStaffInput = Pick<StaffRecord, "name" | "phone" | "note">;
+export type AddStaffInput = Pick<StaffRecord, "name" | "phone" | "note" | "monthlySalary">;
+export type UpdateStaffInput = Pick<StaffRecord, "monthlySalary">;
 export type SaveAttendanceInput = Pick<AttendanceRecord, "staffId" | "businessDate" | "status" | "note"> &
   Partial<Pick<AttendanceRecord, "checkIn" | "checkOut" | "shiftId">>;

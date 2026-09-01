@@ -16,9 +16,9 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 
 - Configure any number of fuel products, tanks, and independently metered stations, including petrol, diesel, XP95, X100, or custom grades.
 - Run the full day from one physical forecourt sheet: Pump A and Pump B, mirrored sides, eight nozzle totalizers, four side-level staff allocations, prices, tank readings and closing collections.
-- Store selling, purchase-cost and market-reference prices while locking the accounting price snapshot into each daily record.
+- Enter two clear daily prices for every fuel: the reseller purchase price paid by the outlet and the customer selling price used for revenue. Both are locked into the daily record.
 - Open one active shift with protected station totalizers, price snapshots, staff allocations, and physical tank stock.
-- Maintain a staff directory and daily present, late, absent, or leave register with check-in and check-out times.
+- Maintain a staff directory, monthly salary commitment, and daily present, late, absent, or leave register with check-in and check-out times.
 - Assign one primary operator to each station; one operator may run multiple stations and assigned operators are marked present automatically.
 - Record fuel deliveries, accepted quantities, density evidence, water dips, and expenses.
 - Capture returned or non-returned test fuel during shift close.
@@ -31,6 +31,7 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 - Calculate aggregated litres, expected sales value, declared handover, and handover variance for every assigned operator across all assigned stations.
 - Reconcile Cash, UPI, Card, Credit and Other collections independently for every pump side, then aggregate the same evidence into staff, product and daily totals.
 - Review live owner dashboards for sales, margin, expenses, fuel stock, throughput, payment mix, and exceptions.
+- Review month-wise finance with revenue, product gross profit, day-wise expenses, salary budget, estimated net profit, and each employee's petrol/diesel litres, revenue, and gross-profit contribution.
 - Export spreadsheet-safe daily, 7-day and 30-day CSV workbooks containing prices, nozzle readings, pump-side collections, staff performance, tank variances, expenses and fuel receipts.
 - Operate across desktop and mobile layouts without staff accounts, role management, or approval queues.
 
@@ -70,14 +71,14 @@ Use a MongoDB deployment that supports transactions so shift opening and closing
 
 ## Owner workflow
 
-1. Configure fuel products, selling/cost prices, tanks, and stations from **Products, tanks & stations**.
-2. Add staff and record attendance from **Staff & attendance**.
-3. Open **Today**, allocate one operator to each pump side, confirm all eight nozzle totalizers, daily prices and tank stock, then start the business day.
+1. Configure fuel products, customer/reseller prices, tanks, and stations from **Products, tanks & stations**.
+2. Add staff, monthly salary commitments, and attendance from **Staff, attendance & salary**.
+3. Open **Today**, enter the reseller and customer price, allocate an operator from each side's dropdown, edit all eight opening totalizers independently, confirm tank stock, then start the business day.
 4. Record deliveries, density/water checks, and expenses during the shift.
 5. Return to the same **Today** page and enter closing totalizers, physical stock, test fuel, and Cash/UPI/Card/Credit collections for every pump side.
 6. Review nozzle, side, product and operator sales, payment variance, expected tank balances, and physical stock variance.
 7. Close once. Tank inventory is updated and the shift is locked in the same transaction.
-8. Review the per-tank movement ledger, or download the daily operations CSV from Reports.
+8. Review month-wise product profit, day-wise expenses, payroll, and employee contribution in **Finance**, or download the operations CSV from Reports.
 
 ## Technology
 
@@ -102,7 +103,7 @@ npm run build
 
 Current verification baseline:
 
-- 36 unit, component, and integration tests
+- 47 unit, component, and integration tests
 - 12 desktop/mobile end-to-end journeys
 - Production build, TypeScript, ESLint, and the automated test suite passing
 

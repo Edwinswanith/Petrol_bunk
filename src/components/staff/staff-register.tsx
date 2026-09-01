@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, UserPlus } from "lucide-react";
+import { Banknote, Clock3, Save, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -11,10 +11,10 @@ export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function post(url: string, payload: object) {
+  async function post(url: string, payload: object, method = "POST") {
     setSaving(true); setMessage("");
     try {
-      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Could not save");
       setMessage("Saved. The register is up to date.");
@@ -26,8 +26,13 @@ export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[
   function addStaff(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    void post("/api/staff", { name: String(form.get("name")), phone: String(form.get("phone") ?? ""), note: String(form.get("note") ?? "") });
+    void post("/api/staff", { name: String(form.get("name")), phone: String(form.get("phone") ?? ""), note: String(form.get("note") ?? ""), monthlySalary: String(form.get("monthlySalary") || "0") });
     event.currentTarget.reset();
+  }
+
+  function updateSalary(event: FormEvent<HTMLFormElement>, staffId: string) {
+    event.preventDefault(); const form = new FormData(event.currentTarget);
+    void post(`/api/staff/${staffId}`, { monthlySalary: String(form.get("monthlySalary") || "0") }, "PATCH");
   }
 
   function markAttendance(event: FormEvent<HTMLFormElement>) {
@@ -47,6 +52,7 @@ export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[
       <form className="compact-form" onSubmit={addStaff}>
         <label className="field"><span>Name</span><input name="name" placeholder="e.g. Arun" required /></label>
         <label className="field"><span>Phone, optional</span><input inputMode="tel" name="phone" placeholder="98765 43210" /></label>
+        <label className="field"><span>Monthly salary</span><input min="0" name="monthlySalary" placeholder="18000" required step="0.01" type="number" /></label>
         <label className="field full"><span>Note, optional</span><input name="note" placeholder="Experienced with petrol machine P1" /></label>
         <button className="button primary" disabled={saving} type="submit"><UserPlus size={14} />Add staff</button>
       </form>
@@ -63,6 +69,11 @@ export function StaffRegister({ staff, attendance, date }: { staff: StaffRecord[
       </form> : <p className="empty-state">Add the first staff member before recording attendance.</p>}
       {message ? <p className="save-note" role="status">{message}</p> : null}
       {attendance.length ? <div className="attendance-chips">{attendance.map((record) => <span className={`attendance-chip ${record.status.toLowerCase()}`} key={record.id}><strong>{record.staffName}</strong>{record.status}{record.checkIn ? ` · ${record.checkIn}` : ""}</span>)}</div> : null}
+    </section>
+    <section className="panel panel-pad salary-panel">
+      <div className="panel-header"><div><p className="panel-kicker">Monthly payroll setup</p><h2 className="panel-title">Staff salary</h2></div><Banknote size={19} color="#087665" /></div>
+      <p className="page-description small">This monthly commitment is included in the Finance profit estimate. Salary payments recorded as expenses remain visible separately.</p>
+      {staff.length ? <div className="salary-list">{staff.map((person) => <form key={person.id} onSubmit={(event) => updateSalary(event, person.id)}><span className="salary-person"><strong>{person.name}</strong><small>{person.phone || "Active operator"}</small></span><label><span>Monthly salary</span><span className="salary-input"><b>₹</b><input aria-label={`${person.name} monthly salary`} defaultValue={person.monthlySalary ?? "0"} min="0" name="monthlySalary" required step="0.01" type="number" /></span></label><button aria-label={`Save ${person.name} salary`} className="icon-button" disabled={saving} type="submit"><Save size={15} /></button></form>)}</div> : <p className="empty-state">Add a staff member to configure salary.</p>}
     </section>
   </div>;
 }

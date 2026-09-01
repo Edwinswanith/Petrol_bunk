@@ -14,7 +14,7 @@ test("owner can move through the core operating views", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /fuel & stock/i })).toBeVisible();
 
   await page.getByRole("link", { name: "Finance" }).first().click();
-  await expect(page.getByRole("heading", { name: /money & margin/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /finance & profitability/i })).toBeVisible();
 });
 
 test("owner can review a shift reconciliation", async ({ page, request }) => {
@@ -94,9 +94,8 @@ test("owner can configure a custom product, tank and station", async ({ page }, 
   const productForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add fuel product" }) });
   await productForm.getByLabel("Code").fill(`XP95${suffix}`);
   await productForm.getByLabel("Name").fill(`XP95 ${suffix}`);
-  await productForm.getByLabel(/selling price/i).fill("110");
-  await productForm.getByLabel(/cost price/i).fill("102");
-  await productForm.getByLabel(/market reference/i).fill("111");
+  await productForm.getByLabel(/customer selling price/i).fill("110");
+  await productForm.getByLabel(/reseller purchase price/i).fill("102");
   await productForm.getByRole("button", { name: /add product/i }).click();
   await expect(page.getByRole("option", { name: `XP95 ${suffix} · ₹110` })).toBeAttached();
 
