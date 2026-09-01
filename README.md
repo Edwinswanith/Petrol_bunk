@@ -105,8 +105,8 @@ npm run build
 
 Current verification baseline:
 
-- 58 unit, component, and integration tests
-- 12 desktop/mobile end-to-end journeys
+- 59 unit, component, and integration tests
+- 19 executed desktop/mobile end-to-end journeys, including responsive checks across 1280, 1024, 768, and 390 pixel viewports
 - Production build, TypeScript, ESLint, and the automated test suite passing
 
 The runtime health endpoint is `GET /api/health`.

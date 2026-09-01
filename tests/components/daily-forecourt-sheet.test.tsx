@@ -62,4 +62,13 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByText("₹72,000.00")).toBeInTheDocument();
     expect(screen.getByText("monthly payroll")).toBeInTheDocument();
   });
+
+  it("uses the station code when legacy station data has no nozzle number", () => {
+    const legacyStation = { ...station("A", 1), stationId: "petrol_1", code: "P1", name: "Petrol station P1", dispenserId: undefined, dispenserCode: undefined, sideId: undefined, sideLabel: undefined, nozzleNumber: undefined };
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={[legacyStation]} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { petrol_1: "1000" }, openingTankStocks: { petrol_tank: "10000" }, staffAssignments: [{ nozzleId: "petrol_1", staffId: "arun", staffName: "Arun" }] }} />);
+
+    expect(screen.queryByText("Nundefined")).not.toBeInTheDocument();
+    expect(screen.queryByText("NP1")).not.toBeInTheDocument();
+    expect(screen.getAllByText("P1").length).toBeGreaterThan(0);
+  });
 });

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 const navigation = [
   { href: "/", label: "Home", icon: House },
@@ -30,6 +30,20 @@ function isCurrent(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLTableElement>(".data-table").forEach((table) => {
+        const labels = [...table.querySelectorAll("thead th")].map((heading) => heading.textContent?.trim() ?? "");
+        table.querySelectorAll("tbody tr").forEach((row) => {
+          [...row.children].forEach((cell, index) => {
+            if (cell instanceof HTMLTableCellElement && labels[index]) cell.dataset.label = labels[index];
+          });
+        });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
 
   return (
     <div className="app-shell">
