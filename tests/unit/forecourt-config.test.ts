@@ -3,17 +3,17 @@ import { describe, expect, it } from "vitest";
 import { createMemoryForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 describe("forecourt configuration", () => {
-  it("seeds pumps 2 and 3 with N1/N2 petrol and N3/N4 diesel", async () => {
+  it("seeds pumps 1 and 2 with N1/N2 petrol and N3/N4 diesel", async () => {
     const configuration = await createMemoryForecourtConfigStore({ seedDefaults: true }).getConfiguration();
 
     expect(configuration.stations).toHaveLength(8);
     expect(configuration.stations.map((station) => station.code)).toEqual([
-      "P2-N1", "P2-N2", "P2-N3", "P2-N4", "P3-N1", "P3-N2", "P3-N3", "P3-N4"
+      "P1-N1", "P1-N2", "P1-N3", "P1-N4", "P2-N1", "P2-N2", "P2-N3", "P2-N4"
     ]);
     expect(configuration.stations.filter((station) => station.nozzleNumber === 1 || station.nozzleNumber === 2).every((station) => station.productId === "petrol" && station.tankId === "petrol_tank")).toBe(true);
     expect(configuration.stations.filter((station) => station.nozzleNumber === 3 || station.nozzleNumber === 4).every((station) => station.productId === "diesel" && station.tankId === "diesel_tank")).toBe(true);
-    expect(configuration.stations.filter((station) => station.sideId === "P2-S1").map((station) => station.code)).toEqual(["P2-N1", "P2-N3"]);
-    expect(configuration.stations.filter((station) => station.sideId === "P2-S2").map((station) => station.code)).toEqual(["P2-N2", "P2-N4"]);
+    expect(configuration.stations.filter((station) => station.sideId === "P1-S1").map((station) => station.code)).toEqual(["P1-N1", "P1-N3"]);
+    expect(configuration.stations.filter((station) => station.sideId === "P1-S2").map((station) => station.code)).toEqual(["P1-N2", "P1-N4"]);
   });
 
   it("adds a custom fuel, tank and station and keeps station codes unique", async () => {

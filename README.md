@@ -15,7 +15,7 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 ## What works
 
 - Configure petrol and diesel products, tanks, and independently metered stations.
-- Run the full day from one physical forecourt sheet: Pump 2 and Pump 3, mirrored sides, eight nozzle totalizers, eight nozzle-level staff allocations, prices, tank readings and closing collections.
+- Run the full day from one physical forecourt sheet: Pump 1 and Pump 2, mirrored sides, eight nozzle totalizers, eight nozzle-level staff allocations, prices, tank readings and closing collections.
 - Enter two clear daily prices for every fuel: the reseller purchase price paid by the outlet and the customer selling price used for revenue. Both are locked into the daily record.
 - Select the business date, carry each nozzle's latest closing totalizer into the next opening, and correct opening totalizers, operator allocations, or daily prices while the day is still open.
 - Open one active shift with protected station totalizers, price snapshots, staff allocations, and physical tank stock.
@@ -114,7 +114,7 @@ The runtime health endpoint is `GET /api/health`.
 ## v1 boundaries
 
 - One owner and one active daily forecourt sheet. Products, tanks, pumps, sides, nozzles, and staff allocations are configurable.
-- The confirmed default layout is Pump 2 and Pump 3 with N1/N3 on Side 1 and N2/N4 on Side 2. N1/N2 are petrol and N3/N4 are diesel; the Today sheet displays this as a fixed map so it does not need daily correction.
+- The confirmed default layout is Pump 1 and Pump 2 with N1/N3 on Side 1 and N2/N4 on Side 2. N1/N2 are petrol and N3/N4 are diesel; the Today sheet displays this as a fixed map so it does not need daily correction.
 - One primary operator is assigned to each nozzle. The owner can correct any nozzle allocation while the day is open, and performance is attributed from the nozzle's actual metered sales.
 - There are no staff accounts, roles, approvals, invitations, or staff-facing screens; the owner records all activity.
 - Closed shifts are immutable in v1.

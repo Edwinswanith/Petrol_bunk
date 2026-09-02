@@ -44,7 +44,7 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getAllByRole("spinbutton", { name: /customer selling price/i })).toHaveLength(2);
     expect(screen.getAllByRole("combobox", { name: /operator/i })).toHaveLength(8);
     expect(screen.queryAllByRole("combobox", { name: /fuel grade/i })).toHaveLength(0);
-    expect(screen.getByText(/Permanent fuel map: N1 and N2 are petrol; N3 and N4 are diesel/i)).toBeInTheDocument();
+    expect(screen.getByText(/Permanent fuel map: N1 and N2 are petrol; N3 and N4 are diesel on both Pump 1 and Pump 2/i)).toBeInTheDocument();
     expect(screen.getAllByRole("spinbutton", { name: /opening totalizer/i })).toHaveLength(8);
     const nozzleOne = screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" });
     const nozzleTwo = screen.getByRole("spinbutton", { name: "A-N2 opening totalizer" });

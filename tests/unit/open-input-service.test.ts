@@ -12,13 +12,13 @@ describe("daily forecourt opening", () => {
     const readings = Object.fromEntries(configuration.stations.map((station, index) => [station.id, String(1000 + index)]));
     const tankStocks = Object.fromEntries(configuration.tanks.map((tank) => [tank.id, tank.currentStock]));
     const assignments = configuration.stations.map((station) => ({
-      staffId: station.sideId === "P2-S1" && station.nozzleNumber === 3 ? "staff-ravi" : `staff-${station.sideId}`,
-      staffName: station.sideId === "P2-S1" && station.nozzleNumber === 3 ? "Ravi" : station.sideLabel ?? "Operator",
+      staffId: station.sideId === "P1-S1" && station.nozzleNumber === 3 ? "staff-ravi" : `staff-${station.sideId}`,
+      staffName: station.sideId === "P1-S1" && station.nozzleNumber === 3 ? "Ravi" : station.sideLabel ?? "Operator",
       nozzleId: station.id
     }));
 
     await expect(prepareOpenShiftInput({ name: "Daily forecourt sheet", businessDate: "2026-09-01", staffOnDuty: [], staffAssignments: assignments, openingNozzleReadings: readings, openingTankStocks: tankStocks }))
-      .rejects.toThrow("Assign one operator to every nozzle on Pump 2 Side 1");
+      .rejects.toThrow("Assign one operator to every nozzle on Pump 1 Side 1");
   });
 
   it("snapshots a valid daily fuel and tank override without changing configuration", async () => {

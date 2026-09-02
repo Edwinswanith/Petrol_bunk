@@ -27,14 +27,14 @@ const defaultTanks: FuelTank[] = [
 ];
 const layoutDate = "2026-09-01T00:00:00.000Z";
 const defaultStations: FuelStation[] = [
-  ["a_n1", "P2-N1", 1, "pump-2", "2", "P2-S1", "Side 1", "petrol", "petrol_tank"],
-  ["a_n2", "P2-N2", 2, "pump-2", "2", "P2-S2", "Side 2", "petrol", "petrol_tank"],
-  ["a_n3", "P2-N3", 3, "pump-2", "2", "P2-S1", "Side 1", "diesel", "diesel_tank"],
-  ["a_n4", "P2-N4", 4, "pump-2", "2", "P2-S2", "Side 2", "diesel", "diesel_tank"],
-  ["b_n1", "P3-N1", 1, "pump-3", "3", "P3-S1", "Side 1", "petrol", "petrol_tank"],
-  ["b_n2", "P3-N2", 2, "pump-3", "3", "P3-S2", "Side 2", "petrol", "petrol_tank"],
-  ["b_n3", "P3-N3", 3, "pump-3", "3", "P3-S1", "Side 1", "diesel", "diesel_tank"],
-  ["b_n4", "P3-N4", 4, "pump-3", "3", "P3-S2", "Side 2", "diesel", "diesel_tank"]
+  ["a_n1", "P1-N1", 1, "pump-1", "1", "P1-S1", "Side 1", "petrol", "petrol_tank"],
+  ["a_n2", "P1-N2", 2, "pump-1", "1", "P1-S2", "Side 2", "petrol", "petrol_tank"],
+  ["a_n3", "P1-N3", 3, "pump-1", "1", "P1-S1", "Side 1", "diesel", "diesel_tank"],
+  ["a_n4", "P1-N4", 4, "pump-1", "1", "P1-S2", "Side 2", "diesel", "diesel_tank"],
+  ["b_n1", "P2-N1", 1, "pump-2", "2", "P2-S1", "Side 1", "petrol", "petrol_tank"],
+  ["b_n2", "P2-N2", 2, "pump-2", "2", "P2-S2", "Side 2", "petrol", "petrol_tank"],
+  ["b_n3", "P2-N3", 3, "pump-2", "2", "P2-S1", "Side 1", "diesel", "diesel_tank"],
+  ["b_n4", "P2-N4", 4, "pump-2", "2", "P2-S2", "Side 2", "diesel", "diesel_tank"]
 ].map(([id, code, nozzleNumber, dispenserId, dispenserCode, sideId, sideLabel, productId, tankId], displayOrder) => ({
   id: String(id), code: String(code), name: `Pump ${dispenserCode} nozzle ${nozzleNumber}`,
   productId: String(productId), tankId: String(tankId), totalizerPrecision: 3,
@@ -114,9 +114,12 @@ async function ensureMongoConfig() {
         database.collection<FuelStation>("fuelStations").createIndex({ code: 1 }, { unique: true }),
         ...defaultProducts.map((item) => database.collection<FuelProduct>("fuelProducts").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true })),
         ...defaultTanks.map((item) => database.collection<FuelTank>("fuelTanks").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true })),
-        database.collection<FuelStation>("fuelStations").updateMany({ id: { $in: ["petrol_1", "diesel_1"] } }, { $set: { active: false, updatedAt: layoutDate } }),
-        ...defaultStations.map((item) => database.collection<FuelStation>("fuelStations").updateOne({ id: item.id }, { $set: item }, { upsert: true }))
+        database.collection<FuelStation>("fuelStations").updateMany({ id: { $in: ["petrol_1", "diesel_1"] } }, { $set: { active: false, updatedAt: layoutDate } })
       ]);
+      // Keep this ordered: Pump 1 must release the old P2-* codes before Pump 2 claims them.
+      for (const item of defaultStations) {
+        await database.collection<FuelStation>("fuelStations").updateOne({ id: item.id }, { $set: item }, { upsert: true });
+      }
       const xpPattern = /^(XP\s?(95|100)|X\s?(95|100))/i;
       const xpProducts = await database.collection<FuelProduct>("fuelProducts").find({ $or: [{ code: xpPattern }, { name: xpPattern }] }).project<{ id: string }>({ id: 1, _id: 0 }).toArray();
       const xpProductIds = xpProducts.map((product) => product.id);
