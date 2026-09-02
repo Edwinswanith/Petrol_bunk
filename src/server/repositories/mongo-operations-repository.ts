@@ -235,6 +235,54 @@ export function createMongoOperationsRepository(): OperationsRepository {
       return Object.fromEntries(tanks.map((tank) => [tank.id, tank.currentStock]));
     },
 
+    async adjustTankStock(input) {
+      await ensureIndexes();
+      await getForecourtConfigStore().getConfiguration();
+      const client = await getMongoClient();
+      const database = await getMongoDatabase();
+      const session = client.startSession();
+      let movement: InventoryMovement | undefined;
+      try {
+        await session.withTransaction(async () => {
+          const tank = await database.collection<FuelTank>("fuelTanks").findOne({ id: input.tankId, active: true }, { session });
+          if (!tank) throw new Error("Fuel tank not found");
+          if (!new Decimal(tank.currentStock).equals(input.previousStock)) {
+            throw new Error("Tank stock changed on another device. Refresh and try again.");
+          }
+          const currentStock = new Decimal(input.currentStock).toDecimalPlaces(3).toFixed(3);
+          if (new Decimal(currentStock).greaterThan(tank.capacityLitres)) {
+            throw new Error(`Stock cannot exceed the ${tank.capacityLitres} litre tank capacity`);
+          }
+          const createdAt = new Date().toISOString();
+          const update = await database.collection<FuelTank>("fuelTanks").updateOne(
+            { id: tank.id, active: true, currentStock: tank.currentStock },
+            { $set: { currentStock, updatedAt: createdAt } },
+            { session }
+          );
+          if (update.matchedCount !== 1) {
+            throw new Error("Tank stock changed on another device. Refresh and try again.");
+          }
+          movement = {
+            id: crypto.randomUUID(),
+            tankId: tank.id,
+            productId: tank.productId,
+            type: "ADJUSTMENT",
+            quantity: new Decimal(currentStock).minus(tank.currentStock).toDecimalPlaces(3).toFixed(3),
+            balanceAfter: currentStock,
+            referenceId: crypto.randomUUID(),
+            referenceLabel: `Manual stock adjustment · ${input.reason}`,
+            businessDate: input.businessDate,
+            createdAt
+          };
+          await database.collection<InventoryMovement>("inventoryMovements").insertOne(movement, { session });
+        });
+      } finally {
+        await session.endSession();
+      }
+      if (!movement) throw new Error("Tank stock adjustment did not complete");
+      return movement;
+    },
+
     async listInventoryMovements(tankId?: string) {
       await ensureIndexes();
       return (await getMongoDatabase()).collection<InventoryMovement>("inventoryMovements")

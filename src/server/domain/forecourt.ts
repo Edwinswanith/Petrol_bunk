@@ -64,3 +64,11 @@ export type InventoryMovement = {
   businessDate: string;
   createdAt: string;
 };
+
+export type TankStockAdjustmentInput = {
+  tankId: string;
+  currentStock: string;
+  previousStock: string;
+  businessDate: string;
+  reason: string;
+};

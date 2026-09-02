@@ -26,6 +26,7 @@ export function apiError(error: unknown) {
     message === "Close the active shift before opening another" ||
     message === "Closed shifts are immutable in v1" ||
     message.startsWith("Shift changed on another device") ||
+    message.startsWith("Tank stock changed on another device") ||
     message.startsWith("Tank stock changed while closing") ||
     message.startsWith("Tank stock changed while opening")
   ) {

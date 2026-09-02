@@ -26,6 +26,7 @@ Forecourt is a responsive, single-owner petrol pump operations system. It connec
 - Reconcile station sales, product totals, physical tank stock, tender totals, cash handover, fuel cost, gross margin, and estimated operating profit with decimal-safe server calculations.
 - Deduct aggregated station outflow from each source tank when a shift closes, while returned test fuel is excluded and unreturned test fuel remains an inventory loss.
 - Increase tank stock immediately when an accepted fuel receipt is saved, with a per-tank auditable movement ledger and balance-after value.
+- Enter the opening petrol and diesel stock manually on first use, or correct either live tank balance later with capacity checks, stale-edit protection, and an auditable reason.
 - Include linked fuel receipts and cash/non-cash expenses automatically in the active shift reconciliation.
 - Preview every reconciliation before an idempotent, immutable close; shift closure and tank deduction are committed in one MongoDB transaction.
 - Require an explanation before closing a material payment, cash, or physical tank variance.

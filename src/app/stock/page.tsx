@@ -2,6 +2,8 @@ import { ArrowRight, Boxes, Droplets, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/ui/page-header";
+import { TankStockEditor } from "@/components/stock/tank-stock-editor";
+import { businessDate } from "@/lib/business-time";
 import { listExpenses, listFuelReceipts } from "@/server/repositories/journal-store";
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
 import { buildDashboardViewModel } from "@/server/services/dashboard-service";
@@ -37,7 +39,13 @@ export default async function StockPage() {
         ))}
       </section>
 
-      <div className="three-column reveal reveal-3" style={{ marginTop: 16 }}>
+      <section className="panel panel-pad reveal reveal-3 stock-adjustment-panel" style={{ marginTop: 16 }}>
+        <div className="panel-header"><div><p className="panel-kicker">Owner stock control</p><h2 className="panel-title">Enter or edit current tank stock</h2></div><span className="status-pill closed">Manual adjustment</span></div>
+        <p className="page-description small">Use the physical dip reading when starting the app for the first time, or correct a recorded balance later. Every change is saved in tank history.</p>
+        <TankStockEditor businessDate={businessDate()} tanks={configuration.tanks.filter((tank) => tank.active).map((tank) => ({ ...tank, productName: configuration.products.find((product) => product.id === tank.productId)?.name ?? "Fuel" }))} />
+      </section>
+
+      <div className="three-column reveal reveal-4" style={{ marginTop: 16 }}>
         <Link className="panel feature-card" href="/stock/density"><span className="feature-icon"><Droplets size={20} /></span><span><h2>Density & quality</h2><p>Morning and post-receipt readings with water-dip checks.</p></span><span className="feature-link">Open register <ArrowRight size={14} /></span></Link>
         <Link className="panel feature-card" href="/stock/receipts/new"><span className="feature-icon"><Truck size={20} /></span><span><h2>Fuel receipts</h2><p>Capture invoice, tanker, accepted quantity and density.</p></span><span className="feature-link">Record delivery <ArrowRight size={14} /></span></Link>
         <Link className="panel feature-card" href="#lubricants"><span className="feature-icon"><Boxes size={20} /></span><span><h2>Packaged goods</h2><p>Engine oil, coolant and add-on inventory.</p></span><span className="feature-link">View products <ArrowRight size={14} /></span></Link>

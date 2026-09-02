@@ -1,8 +1,48 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { createMemoryOperationsRepository } from "@/server/repositories/memory-operations-repository";
+import { createMemoryForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 describe("MemoryOperationsRepository", () => {
+  beforeEach(() => {
+    globalThis.forecourtConfigStore = createMemoryForecourtConfigStore({ seedDefaults: true });
+  });
+
+  it("records an auditable manual tank stock adjustment", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+
+    const movement = await repository.adjustTankStock({
+      tankId: "petrol_tank",
+      currentStock: "15000",
+      previousStock: "12460",
+      businessDate: "2026-09-02",
+      reason: "Opening physical dip"
+    });
+
+    const configuration = await globalThis.forecourtConfigStore.getConfiguration();
+    expect(configuration.tanks.find((tank) => tank.id === "petrol_tank")?.currentStock).toBe("15000.000");
+    expect(movement).toMatchObject({
+      tankId: "petrol_tank",
+      type: "ADJUSTMENT",
+      quantity: "2540.000",
+      balanceAfter: "15000.000",
+      businessDate: "2026-09-02",
+      referenceLabel: "Manual stock adjustment · Opening physical dip"
+    });
+    expect(await repository.listInventoryMovements("petrol_tank")).toEqual([movement]);
+  });
+
+  it("rejects a manual stock adjustment above capacity or based on stale stock", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const base = { tankId: "diesel_tank", businessDate: "2026-09-02", reason: "Opening physical dip" };
+
+    await expect(repository.adjustTankStock({ ...base, currentStock: "21000", previousStock: "9002.985" }))
+      .rejects.toThrow("Stock cannot exceed the 20000 litre tank capacity");
+    await expect(repository.adjustTankStock({ ...base, currentStock: "10000", previousStock: "8000" }))
+      .rejects.toThrow("Tank stock changed on another device. Refresh and try again.");
+    expect(await repository.listInventoryMovements()).toHaveLength(0);
+  });
+
   it("opens a shift idempotently", async () => {
     const repository = createMemoryOperationsRepository({ seedDemoData: false });
     const input = {

@@ -303,6 +303,16 @@ textarea:focus-visible {
 .success-message { display: flex; gap: 10px; align-items: flex-start; padding: 15px; color: #28553d; background: #dfede4; border-radius: 13px; }
 .success-message strong, .success-message span { display: block; }
 .success-message span { margin-top: 3px; font-size: 11px; opacity: .8; }
+.stock-adjustment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.stock-adjustment-card { padding: 16px; border: 1px solid #deddd4; border-radius: 14px; background: #f8f7f2; }
+.stock-adjustment-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.stock-adjustment-card header span, .stock-adjustment-card header small, .stock-adjustment-card header strong { display: block; }
+.stock-adjustment-card header small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.stock-adjustment-card header strong { margin-top: 3px; font-size: 15px; }
+.stock-capacity { text-align: right; }
+.stock-capacity strong { font-family: var(--font-mono); font-size: 12px !important; }
+.stock-adjustment-note { margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.stock-save-success { display: flex; align-items: center; gap: 7px; margin-top: 10px; padding: 9px 11px; border-radius: 10px; color: #28553d; background: #dfede4; font-size: 11px; }
 
 .reconciliation-card { margin-top: 18px; padding: 20px; border-radius: 17px; color: #f3f4ee; background: var(--ink); }
 .reconciliation-hero { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.12); }
@@ -379,6 +389,7 @@ textarea:focus-visible {
   .data-table td[data-label]::before { content: attr(data-label); flex: 0 0 42%; color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   .data-table td:last-child { text-align: left; }
   .form-grid, .form-grid.three { grid-template-columns: 1fr; }
+  .stock-adjustment-grid { grid-template-columns: 1fr; }
   .field.full { grid-column: auto; }
   .form-actions { position: static; padding: 0; margin: 18px 0 0; background: transparent; }
   .form-actions .button { flex: 1; }

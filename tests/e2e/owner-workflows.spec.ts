@@ -137,6 +137,20 @@ test("owner can move through the core operating views", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /finance & profitability/i })).toBeVisible();
 });
 
+test("owner can enter the current petrol stock and see the audited adjustment", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One isolated stock adjustment is sufficient.");
+  await page.goto("/stock");
+
+  await page.getByLabel("Petrol current stock").fill("13500.250");
+  await page.getByLabel("Petrol adjustment reason").fill("First physical dip");
+  await page.getByRole("button", { name: "Save Petrol stock" }).click();
+
+  await expect(page.getByText("Petrol stock updated to 13,500.25 L")).toBeVisible();
+  await page.getByRole("link", { name: "Tank history" }).first().click();
+  await expect(page.getByText("Manual stock adjustment · First physical dip")).toBeVisible();
+  await expect(page.getByText("13,500.25 L", { exact: true })).toBeVisible();
+});
+
 test("owner can review a shift reconciliation", async ({ page, request }) => {
   const shifts = await (await request.get("/api/shifts")).json();
   const active = shifts.find((shift: { state: string }) => shift.state === "OPEN");

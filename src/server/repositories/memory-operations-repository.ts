@@ -6,7 +6,7 @@ import type {
 } from "@/server/domain/operations";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
 import Decimal from "decimal.js";
-import type { InventoryMovement } from "@/server/domain/forecourt";
+import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
 
@@ -224,6 +224,36 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
 
     async getTankBalances() {
       return Object.fromEntries(tankBalances);
+    },
+
+    async adjustTankStock(input: TankStockAdjustmentInput) {
+      const store = getForecourtConfigStore();
+      const tank = (await store.getConfiguration()).tanks.find((entry) => entry.id === input.tankId && entry.active);
+      if (!tank) throw new Error("Fuel tank not found");
+      if (!new Decimal(tank.currentStock).equals(input.previousStock)) {
+        throw new Error("Tank stock changed on another device. Refresh and try again.");
+      }
+      const currentStock = new Decimal(input.currentStock).toDecimalPlaces(3).toFixed(3);
+      if (new Decimal(currentStock).greaterThan(tank.capacityLitres)) {
+        throw new Error(`Stock cannot exceed the ${tank.capacityLitres} litre tank capacity`);
+      }
+      const now = new Date().toISOString();
+      const movement: InventoryMovement = {
+        id: crypto.randomUUID(),
+        tankId: tank.id,
+        productId: tank.productId,
+        type: "ADJUSTMENT",
+        quantity: new Decimal(currentStock).minus(tank.currentStock).toDecimalPlaces(3).toFixed(3),
+        balanceAfter: currentStock,
+        referenceId: crypto.randomUUID(),
+        referenceLabel: `Manual stock adjustment · ${input.reason}`,
+        businessDate: input.businessDate,
+        createdAt: now
+      };
+      await store.setTankStock(tank.id, currentStock);
+      tankBalances.set(tank.id, currentStock);
+      inventoryMovements.push(movement);
+      return clone(movement);
     },
 
     async listInventoryMovements(tankId?: string) {

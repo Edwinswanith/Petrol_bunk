@@ -129,6 +129,13 @@ export const fuelTankSchema = z.object({
   currentStock: decimal
 });
 
+export const tankStockAdjustmentSchema = z.object({
+  currentStock: decimal,
+  previousStock: decimal,
+  businessDate: z.string().date(),
+  reason: z.string().trim().min(2).max(300)
+});
+
 export const fuelStationSchema = z.object({
   code: z.string().trim().min(1).max(20),
   name: z.string().trim().min(2).max(80),
