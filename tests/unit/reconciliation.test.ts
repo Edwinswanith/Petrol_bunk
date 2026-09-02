@@ -209,7 +209,7 @@ describe("calculateManagementProfit", () => {
 });
 
 describe("staff machine reconciliation", () => {
-  it("reconciles collections for a pump side and attributes the result to its operator", () => {
+  it("reconciles collections for a pump and attributes the result to its operator", () => {
     const shift: ShiftRecord = {
       id: "shift-pump-a", state: "OPEN", name: "Daily forecourt sheet", businessDate: "2026-09-01",
       staffOnDuty: ["Edwin"],
@@ -233,17 +233,57 @@ describe("staff machine reconciliation", () => {
       closingNozzleReadings: { a_n1: "1800", a_n3: "2500" },
       closingTankStocks: { petrol_tank: "4200", diesel_tank: "5500" }, nonSaleDispenses: [],
       receipts: { petrol_tank: "0", diesel_tank: "0" },
-      sideCollections: { "A-S1": { cash: "50000", upi: "60000", card: "22250", credit: "0", other: "0", declaredCashHandover: "50000" } },
+      sideCollections: { "pump-a": { cash: "50000", upi: "60000", card: "22250", credit: "0", other: "0", declaredCashHandover: "50000" } },
       payments: { cashSales: "50000", upi: "60000", card: "22250", credit: "0", other: "0", cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "50000" },
       staffHandovers: { "staff-edwin": "132250" }, lubricantRevenue: "0", lubricantCost: "0", expenses: "0"
     };
 
     const result = reconcileShift(shift, input);
     expect(result.sides).toEqual([expect.objectContaining({
-      sideId: "A-S1", dispenserCode: "A", staffName: "Edwin", litresSold: "1300.000",
+      sideId: "pump-a", dispenserCode: "A", staffName: "Edwin", litresSold: "1300.000",
       expectedSalesValue: "132250.00", accountedTender: "132250.00", tenderVariance: "0.00"
     })]);
     expect(result.staff?.[0]).toEqual(expect.objectContaining({ staffName: "Edwin", litresSold: "1300.000", expectedSalesValue: "132250.00" }));
+  });
+
+  it("rolls both sides of a pump into a single collection entry", () => {
+    const nozzle = (id: string, sideId: string, productId: "petrol" | "diesel") => ({
+      stationId: id, code: id.toUpperCase(), name: id,
+      productId, productName: productId === "petrol" ? "Petrol" : "Diesel",
+      tankId: `${productId}_tank`, tankName: `${productId} tank`,
+      pricePerLitre: "100", costPerLitre: "90",
+      dispenserId: "pump-a", dispenserCode: "1", sideId, sideLabel: sideId
+    });
+    const shift: ShiftRecord = {
+      id: "shift-pump", state: "OPEN", name: "Daily forecourt sheet", businessDate: "2026-09-01",
+      staffOnDuty: ["Edwin"],
+      staffAssignments: ["a_n1", "a_n2", "a_n3", "a_n4"].map((nozzleId) => ({ staffId: "staff-edwin", staffName: "Edwin", nozzleId })),
+      stationSnapshots: [nozzle("a_n1", "A-S1", "petrol"), nozzle("a_n2", "A-S2", "petrol"), nozzle("a_n3", "A-S1", "diesel"), nozzle("a_n4", "A-S2", "diesel")],
+      tankSnapshots: [
+        { tankId: "petrol_tank", code: "PT1", name: "Petrol Tank", productId: "petrol", productName: "Petrol", capacityLitres: "20000" },
+        { tankId: "diesel_tank", code: "DT1", name: "Diesel Tank", productId: "diesel", productName: "Diesel", capacityLitres: "20000" }
+      ],
+      openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" },
+      openingTankStocks: { petrol_tank: "5000", diesel_tank: "6000" },
+      createdAt: "2026-09-01T03:30:00.000Z", startedAt: "2026-09-01T03:30:00.000Z", version: 1
+    };
+    const input: CloseShiftInput = {
+      closingNozzleReadings: { a_n1: "10", a_n2: "20", a_n3: "30", a_n4: "40" },
+      closingTankStocks: { petrol_tank: "4970", diesel_tank: "5930" }, nonSaleDispenses: [],
+      receipts: { petrol_tank: "0", diesel_tank: "0" },
+      sideCollections: { "pump-a": { cash: "10000", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "10000" } },
+      payments: { cashSales: "10000", upi: "0", card: "0", credit: "0", other: "0", cashReceipts: "0", cashExpenses: "0", cashRemovals: "0", declaredCashHandover: "10000" },
+      staffHandovers: { "staff-edwin": "10000" }, lubricantRevenue: "0", lubricantCost: "0", expenses: "0"
+    };
+
+    const result = reconcileShift(shift, input);
+
+    expect(result.sides).toHaveLength(1);
+    expect(result.sides?.[0]).toEqual(expect.objectContaining({
+      sideId: "pump-a", sideLabel: "Pump 1", dispenserCode: "1", staffName: "Edwin",
+      nozzleIds: ["a_n1", "a_n2", "a_n3", "a_n4"], litresSold: "100.000", expectedSalesValue: "10000.00",
+      accountedTender: "10000.00", tenderVariance: "0.00"
+    }));
   });
 
   it("requires an explanation when side variances cancel in the overall total", () => {

@@ -87,7 +87,49 @@ describe("prepareCloseInput", () => {
     expect(prepared.staffHandovers).toEqual({ "staff-edwin": "15.3", "staff-priya": "101" });
   });
 
-  it("does not allow a configured pump side to be omitted from closing", async () => {
+  it("collects one entry per pump when stations carry a dispenser", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const nozzle = (id: string, sideId: string) => ({
+      stationId: id, code: id.toUpperCase(), name: id, productId: "petrol", productName: "Petrol",
+      tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95",
+      dispenserId: "pump-a", dispenserCode: "1", sideId
+    });
+    const pumpShift: ShiftRecord = {
+      ...shift,
+      staffAssignments: ["a_n1", "a_n2", "a_n3", "a_n4"].map((nozzleId) => ({ staffId: "staff-edwin", staffName: "Edwin", nozzleId })),
+      stationSnapshots: [nozzle("a_n1", "A-S1"), nozzle("a_n2", "A-S2"), nozzle("a_n3", "A-S1"), nozzle("a_n4", "A-S2")]
+    };
+
+    const prepared = await prepareCloseInput(pumpShift, {
+      ...closeInput,
+      payments: { ...closeInput.payments, cashSales: "999999", upi: "999999", declaredCashHandover: "999999" },
+      staffHandovers: { "staff-edwin": "999999" },
+      sideCollections: { "pump-a": { cash: "500", upi: "300", card: "100", credit: "50", other: "25", declaredCashHandover: "500" } }
+    });
+
+    expect(prepared.payments).toEqual(expect.objectContaining({ cashSales: "500", upi: "300", card: "100", credit: "50", other: "25", declaredCashHandover: "500" }));
+    expect(prepared.staffHandovers).toEqual({ "staff-edwin": "975" });
+  });
+
+  it("does not allow a configured pump to be omitted from closing", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const pumpShift: ShiftRecord = {
+      ...shift,
+      stationSnapshots: [
+        { stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", dispenserId: "pump-a", sideId: "A-S1" },
+        { stationId: "b_n1", code: "B-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", dispenserId: "pump-b", sideId: "B-S1" }
+      ]
+    };
+
+    await expect(prepareCloseInput(pumpShift, {
+      ...closeInput,
+      sideCollections: { "pump-a": { cash: "0", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "0" } }
+    })).rejects.toThrow("Enter collections for pump pump-b");
+  });
+
+  it("falls back to grouping by side when stations predate dispensers", async () => {
     vi.mocked(listExpenses).mockResolvedValue([]);
     vi.mocked(listFuelReceipts).mockResolvedValue([]);
     const pumpShift: ShiftRecord = {
@@ -103,7 +145,7 @@ describe("prepareCloseInput", () => {
       sideCollections: {
         "A-S1": { cash: "0", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "0" }
       }
-    })).rejects.toThrow("Enter collections for pump side A-S2");
+    })).rejects.toThrow("Enter collections for pump A-S2");
   });
 
   it("treats a custom station without layout metadata as its own side", async () => {

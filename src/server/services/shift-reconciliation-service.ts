@@ -12,6 +12,7 @@ import type {
   ShiftRecord,
   ShiftReconciliation
 } from "@/server/domain/operations";
+import { pumpGroupId, pumpGroupLabel } from "@/server/domain/pump-grouping";
 
 export type NozzleConfig = {
   tankId: string;
@@ -133,16 +134,16 @@ export function reconcileShift(
   });
 
   const sides: NonNullable<ShiftReconciliation["sides"]> = [];
-  const groupedSides = new Map<string, NonNullable<ShiftRecord["stationSnapshots"]>>();
+  const groupedPumps = new Map<string, NonNullable<ShiftRecord["stationSnapshots"]>>();
   for (const station of shift.stationSnapshots ?? []) {
-    if (!station.sideId && !input.sideCollections?.[station.stationId]) continue;
-    const sideId = station.sideId ?? station.stationId;
-    groupedSides.set(sideId, [...(groupedSides.get(sideId) ?? []), station]);
+    if (!station.dispenserId && !station.sideId && !input.sideCollections?.[station.stationId]) continue;
+    const pumpId = pumpGroupId(station, station.stationId);
+    groupedPumps.set(pumpId, [...(groupedPumps.get(pumpId) ?? []), station]);
   }
-  for (const [sideId, stations] of groupedSides) {
+  for (const [pumpId, stations] of groupedPumps) {
     const nozzleIds = stations.map((station) => station.stationId);
     const assignment = (shift.staffAssignments ?? []).find((item) => nozzleIds.includes(item.nozzleId));
-    const collection = input.sideCollections?.[sideId] ?? {
+    const collection = input.sideCollections?.[pumpId] ?? {
       cash: "0", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "0"
     };
     const litres = Decimal.sum(0, ...nozzleIds.map((id) => nozzleResults[id]?.customerSalesVolume ?? "0"));
@@ -155,8 +156,8 @@ export function reconcileShift(
       current.litres = current.litres.plus(nozzle.customerSalesVolume); current.revenue = current.revenue.plus(nozzle.revenue); current.cost = current.cost.plus(new Decimal(nozzle.customerSalesVolume).times(station.costPerLitre)); sideProducts.set(station.productId, current);
     }
     sides.push({
-      sideId,
-      sideLabel: stations[0].sideLabel ?? sideId,
+      sideId: pumpId,
+      sideLabel: pumpGroupLabel(stations[0], pumpId),
       dispenserId: stations[0].dispenserId ?? "",
       dispenserCode: stations[0].dispenserCode ?? "",
       staffId: assignment?.staffId ?? "",

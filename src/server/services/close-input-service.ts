@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 
 import type { CloseShiftInput, ShiftRecord } from "@/server/domain/operations";
+import { pumpGroupId } from "@/server/domain/pump-grouping";
 import { listExpenses, listFuelReceipts } from "@/server/repositories/journal-store";
 
 function belongsToShift(record: { shiftId?: string; createdAt: string }, shift: ShiftRecord) {
@@ -32,16 +33,16 @@ export async function prepareCloseInput(
   let canonicalPayments = structuredClone(input.payments);
   let canonicalStaffHandovers = structuredClone(input.staffHandovers);
   if (input.sideCollections) {
-    const stationsBySide = new Map<string, NonNullable<ShiftRecord["stationSnapshots"]>>();
+    const stationsByPump = new Map<string, NonNullable<ShiftRecord["stationSnapshots"]>>();
     for (const station of shift.stationSnapshots ?? []) {
-      const sideId = station.sideId ?? station.stationId;
-      stationsBySide.set(sideId, [...(stationsBySide.get(sideId) ?? []), station]);
+      const pumpId = pumpGroupId(station, station.stationId);
+      stationsByPump.set(pumpId, [...(stationsByPump.get(pumpId) ?? []), station]);
     }
-    for (const sideId of Object.keys(input.sideCollections)) {
-      if (!stationsBySide.has(sideId)) throw new Error(`Unknown pump side: ${sideId}`);
+    for (const pumpId of Object.keys(input.sideCollections)) {
+      if (!stationsByPump.has(pumpId)) throw new Error(`Unknown pump: ${pumpId}`);
     }
-    for (const sideId of stationsBySide.keys()) {
-      if (!input.sideCollections[sideId]) throw new Error(`Enter collections for pump side ${sideId}`);
+    for (const pumpId of stationsByPump.keys()) {
+      if (!input.sideCollections[pumpId]) throw new Error(`Enter collections for pump ${pumpId}`);
     }
 
     const totals = {
@@ -49,8 +50,8 @@ export async function prepareCloseInput(
       other: new Decimal(0), declaredCashHandover: new Decimal(0)
     };
     const staffTotals = new Map<string, Decimal>();
-    for (const [sideId, stations] of stationsBySide) {
-      const collection = input.sideCollections[sideId];
+    for (const [pumpId, stations] of stationsByPump) {
+      const collection = input.sideCollections[pumpId];
       if (!collection) continue;
       totals.cash = totals.cash.plus(collection.cash);
       totals.upi = totals.upi.plus(collection.upi);

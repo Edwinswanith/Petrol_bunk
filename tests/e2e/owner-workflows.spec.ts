@@ -98,18 +98,20 @@ test("owner can enter a balanced dummy day and review it from Today", async ({ p
   expect(active).toBeTruthy();
   await page.goto("/day");
 
-  const sideTotals = new Map<string, number>();
+  const pumpTotals = new Map<string, number>();
+  const pumpCodes = new Map<string, string>();
   const tankOutflow = new Map<string, number>();
   for (const station of active.stationSnapshots) {
-    await page.getByLabel(`${station.code} active operator`).selectOption({ index: 1 });
     await page.getByLabel(`${station.code} closing totalizer`).fill((Number(active.openingNozzleReadings[station.stationId]) + 1).toFixed(3));
-    const sideId = station.sideId ?? station.stationId;
-    sideTotals.set(sideId, (sideTotals.get(sideId) ?? 0) + Number(station.pricePerLitre));
+    const pumpId = station.dispenserId ?? station.sideId ?? station.stationId;
+    pumpCodes.set(pumpId, station.dispenserCode ?? pumpId);
+    pumpTotals.set(pumpId, (pumpTotals.get(pumpId) ?? 0) + Number(station.pricePerLitre));
     tankOutflow.set(station.tankId, (tankOutflow.get(station.tankId) ?? 0) + 1);
   }
-  for (const [sideId, total] of sideTotals) {
-    await page.locator(`input[name="cash-${sideId}"]`).fill(total.toFixed(2));
-    await page.locator(`input[name="handover-${sideId}"]`).fill(total.toFixed(2));
+  for (const [pumpId, total] of pumpTotals) {
+    await page.getByLabel(`Pump ${pumpCodes.get(pumpId)} active operator`).selectOption({ index: 1 });
+    await page.locator(`input[name="cash-${pumpId}"]`).fill(total.toFixed(2));
+    await page.locator(`input[name="handover-${pumpId}"]`).fill(total.toFixed(2));
   }
   for (const [tankId, opening] of Object.entries(active.openingTankStocks as Record<string, string>)) {
     await page.locator(`input[name="tank-closing-${tankId}"]`).fill((Number(opening) - (tankOutflow.get(tankId) ?? 0)).toFixed(3));

@@ -1,4 +1,5 @@
 import type { OpenShiftInput } from "@/server/domain/operations";
+import { pumpGroupId, pumpGroupLabel } from "@/server/domain/pump-grouping";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 export async function prepareOpenShiftInput(input: OpenShiftInput): Promise<OpenShiftInput> {
@@ -15,16 +16,15 @@ export async function prepareOpenShiftInput(input: OpenShiftInput): Promise<Open
   if (invalidAssignment) throw new Error(`Unknown assigned station: ${invalidAssignment.nozzleId}`);
   const unassignedStation = activeStations.find((station) => !input.staffAssignments?.some((assignment) => assignment.nozzleId === station.id));
   if (unassignedStation) throw new Error(`Assign an operator to ${unassignedStation.code}`);
-  const sides = new Map<string, typeof activeStations>();
+  const pumps = new Map<string, typeof activeStations>();
   for (const station of activeStations) {
-    const sideId = station.sideId ?? station.id;
-    sides.set(sideId, [...(sides.get(sideId) ?? []), station]);
+    const pumpId = pumpGroupId(station, station.id);
+    pumps.set(pumpId, [...(pumps.get(pumpId) ?? []), station]);
   }
-  for (const sideStations of sides.values()) {
-    const staffIds = new Set(sideStations.map((station) => input.staffAssignments?.find((assignment) => assignment.nozzleId === station.id)?.staffId));
+  for (const [pumpId, pumpStations] of pumps) {
+    const staffIds = new Set(pumpStations.map((station) => input.staffAssignments?.find((assignment) => assignment.nozzleId === station.id)?.staffId));
     if (staffIds.size !== 1) {
-      const station = sideStations[0];
-      throw new Error(`Assign one operator to every nozzle on Pump ${station.dispenserCode} ${station.sideLabel}`);
+      throw new Error(`Assign one operator to every nozzle on ${pumpGroupLabel(pumpStations[0], pumpId)}`);
     }
   }
 
