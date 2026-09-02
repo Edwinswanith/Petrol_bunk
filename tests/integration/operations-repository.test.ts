@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createMemoryOperationsRepository } from "@/server/repositories/memory-operations-repository";
-import { createMemoryForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
+import { createMemoryForecourtConfigStore, getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 describe("MemoryOperationsRepository", () => {
   beforeEach(() => {
@@ -19,7 +19,7 @@ describe("MemoryOperationsRepository", () => {
       reason: "Opening physical dip"
     });
 
-    const configuration = await globalThis.forecourtConfigStore.getConfiguration();
+    const configuration = await getForecourtConfigStore().getConfiguration();
     expect(configuration.tanks.find((tank) => tank.id === "petrol_tank")?.currentStock).toBe("15000.000");
     expect(movement).toMatchObject({
       tankId: "petrol_tank",
