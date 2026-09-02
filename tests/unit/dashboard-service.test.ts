@@ -89,4 +89,31 @@ describe("buildDashboardViewModel", () => {
     expect(dashboard.tanks.map((tank) => tank.litres)).toEqual(["12,000 L", "8,000 L"]);
     expect(dashboard.dataStatus).toBe("LIVE");
   });
+
+  it("uses configured products and raises critical and watch stock alerts before any sales", () => {
+    const now = "2026-08-31T00:00:00.000Z";
+    const dashboard = buildDashboardViewModel({
+      shifts: [],
+      expenses: [{ id: "expense-2", category: "maintenance", amount: "50", paymentMethod: "cash", date: "2026-08-31", note: "Repair", createdAt: now, idempotencyKey: "expense-2" }],
+      configuration: {
+        products: [
+          { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "100", costPricePerLitre: "95", active: true, createdAt: now, updatedAt: now },
+          { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "90", costPricePerLitre: "85", active: true, createdAt: now, updatedAt: now }
+        ],
+        tanks: [
+          { id: "petrol_tank", code: "PT1", name: "Petrol tank", productId: "petrol", capacityLitres: "1000", currentStock: "100", active: true, createdAt: now, updatedAt: now },
+          { id: "diesel_tank", code: "DT1", name: "Diesel tank", productId: "diesel", capacityLitres: "1000", currentStock: "300", active: true, createdAt: now, updatedAt: now }
+        ],
+        stations: []
+      },
+      now: new Date("2026-08-31T12:00:00.000Z")
+    });
+
+    expect(dashboard.tanks.map((tank) => ({ status: tank.status, days: tank.daysRemaining }))).toEqual([
+      { status: "critical", days: "No sales rate" }, { status: "watch", days: "No sales rate" }
+    ]);
+    expect(dashboard.alerts.map((alert) => alert.severity)).toEqual(["critical", "warning"]);
+    expect(dashboard.metrics.find((metric) => metric.label === "Est. operating profit")).toMatchObject({ value: "-₹50", tone: "warning" });
+    expect(dashboard.paymentMix.every((payment) => payment.percentage === 0)).toBe(true);
+  });
 });

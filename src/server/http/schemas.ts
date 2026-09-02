@@ -65,10 +65,12 @@ export const staffSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(20).optional().default(""),
   note: z.string().trim().max(300).optional().default(""),
-  monthlySalary: decimal.optional().default("0")
+  monthlySalary: decimal.optional().default("0"),
+  dailyBeta: decimal.optional().default("0"),
+  assignedShift: z.enum(["SHIFT_1", "SHIFT_2"]).optional().default("SHIFT_1")
 });
 
-export const staffUpdateSchema = z.object({ monthlySalary: decimal });
+export const staffUpdateSchema = z.object({ monthlySalary: decimal, dailyBeta: decimal.optional(), assignedShift: z.enum(["SHIFT_1", "SHIFT_2"]).optional() });
 
 export const attendanceSchema = z.object({
   staffId: z.string().min(1),

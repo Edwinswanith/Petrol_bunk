@@ -16,7 +16,7 @@ export const demoDashboard: DashboardViewModel = {
     name: "Evening shift",
     status: "OPEN",
     startedAtLabel: "Started at 5:00 PM",
-    staffOnDuty: ["Kumar", "Ravi"],
+    staffOnDuty: ["Nagaraj", "Kavita"],
     completion: 62
   },
   tanks: [

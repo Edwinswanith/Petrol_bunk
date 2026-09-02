@@ -42,8 +42,8 @@ describe("shift staff assignments", () => {
 
 describe("staff salary", () => {
   it("stores a non-negative monthly salary and defaults older additions to zero", () => {
-    expect(staffSchema.parse({ name: "Edwin" }).monthlySalary).toBe("0");
-    expect(staffSchema.parse({ name: "Edwin", monthlySalary: "18000" }).monthlySalary).toBe("18000");
-    expect(() => staffUpdateSchema.parse({ monthlySalary: "-1" })).toThrow();
+    expect(staffSchema.parse({ name: "Edwin" })).toMatchObject({ monthlySalary: "0", dailyBeta: "0", assignedShift: "SHIFT_1" });
+    expect(staffSchema.parse({ name: "Edwin", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_2" })).toMatchObject({ monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_2" });
+    expect(() => staffUpdateSchema.parse({ monthlySalary: "-1", dailyBeta: "0", assignedShift: "SHIFT_1" })).toThrow();
   });
 });

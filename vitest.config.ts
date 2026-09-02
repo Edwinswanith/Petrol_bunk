@@ -22,6 +22,7 @@ export default defineConfig({
         "src/server/repositories/memory-operations-repository.ts",
         "src/server/services/close-input-service.ts",
         "src/server/services/dashboard-service.ts",
+        "src/server/services/payroll-service.ts",
         "src/server/services/shift-reconciliation-service.ts"
       ],
       thresholds: {

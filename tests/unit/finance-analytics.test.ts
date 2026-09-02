@@ -72,7 +72,7 @@ describe("buildFinanceAnalytics", () => {
   });
 
   it("uses approved payroll settlement instead of the budget in net profit", () => {
-    const payroll = [{ id: "edwin:2026-05", staffId: "edwin", staffName: "Edwin", month: "2026-05", baseSalary: "15000", presentDays: 1, lateDays: 0, absentDays: 0, leaveDays: 0, halfDays: 0, overtime: "0", attendanceDeduction: "1000", advances: "0", otherDeductions: "0", grossPay: "15000", totalDeductions: "1000", netPay: "14000", amountPaid: "10000", balanceDue: "4000", note: "", createdAt: "2026-05-01", updatedAt: "2026-05-01" }];
+    const payroll = [{ id: "edwin:2026-05", staffId: "edwin", staffName: "Edwin", month: "2026-05", baseSalary: "15000", presentDays: 1, lateDays: 0, absentDays: 0, leaveDays: 0, halfDays: 0, dailyBetaRate: "0", betaDays: 1, betaEarned: "0", overtime: "0", attendanceDeduction: "1000", advances: "0", otherDeductions: "0", grossPay: "15000", totalDeductions: "1000", netPay: "14000", amountPaid: "10000", balanceDue: "4000", note: "", createdAt: "2026-05-01", updatedAt: "2026-05-01" }];
     const result = buildFinanceAnalytics({ month: "2026-05", shifts: [shift], expenses: [], staff, payroll });
     expect(result.summary).toEqual(expect.objectContaining({ settledPayrollNet: "14000.00", settledPayrollPaid: "10000.00", estimatedNetProfit: "-12500.00" }));
   });

@@ -71,7 +71,7 @@ test("mobile operational form controls keep touch-friendly heights", async ({ pa
   }
 
   await page.goto("/staff");
-  for (const control of [page.getByLabel("Arun monthly salary"), page.locator('input[name="halfDays"]').first(), page.getByRole("button", { name: "Save Arun salary" })]) {
+  for (const control of [page.getByLabel("Omapathy monthly salary"), page.locator('input[name="halfDays"]').first(), page.getByRole("button", { name: "Save Omapathy salary" })]) {
     expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40);
   }
 });

@@ -40,7 +40,7 @@ export default async function DailyForecourtPage() {
     previousReadings={carryForward.readings}
     previousReadingSources={carryForward.sources}
     products={configuration.products.filter((product) => product.active)}
-    staff={staff.filter((person) => person.active).map((person) => ({ id: person.id, name: person.name, monthlySalary: person.monthlySalary ?? "0" }))}
+    staff={staff.filter((person) => person.active).map((person) => ({ id: person.id, name: person.name, monthlySalary: person.monthlySalary ?? "0", dailyBeta: person.dailyBeta ?? "0", assignedShift: person.assignedShift ?? "SHIFT_1" }))}
     stations={stations}
     tanks={sheetTanks}
   /></main>;

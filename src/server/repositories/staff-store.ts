@@ -1,5 +1,5 @@
 import { hasMongoConfiguration, getMongoDatabase } from "@/server/db/mongo-client";
-import type { AddStaffInput, AttendanceRecord, PayrollRecord, SaveAttendanceInput, SavePayrollInput, StaffRecord, UpdateStaffInput } from "@/server/domain/staff";
+import type { AddStaffInput, AttendanceRecord, PayrollRecord, SaveAttendanceInput, SavePayrollInput, StaffRecord, StaffShift, UpdateStaffInput } from "@/server/domain/staff";
 import { calculatePayrollSettlement } from "@/server/services/payroll-service";
 
 export type StaffStore = {
@@ -14,30 +14,58 @@ export type StaffStore = {
 
 function clone<T>(value: T): T { return structuredClone(value); }
 
-const defaultStaff = ["Arun", "Kumar", "Priya", "Ravi"].map((name) => ({ name, phone: "", note: "Initial forecourt operator", monthlySalary: "18000" }));
+const defaultStaff: Array<Required<Pick<StaffRecord, "name" | "phone" | "note" | "monthlySalary" | "dailyBeta" | "assignedShift">>> = [
+  { name: "Omapathy", phone: "", note: "Shift 1 · ₹150 daily beta; no beta on leave or absence", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_1" },
+  { name: "Sampath", phone: "", note: "Shift 1 · ₹150 daily beta; no beta on leave or absence", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_1" },
+  { name: "Nagaraj", phone: "", note: "Shift 2 · fixed monthly salary", monthlySalary: "18000", dailyBeta: "0", assignedShift: "SHIFT_2" },
+  { name: "Kavita", phone: "", note: "Shift 2 · fixed monthly salary", monthlySalary: "18000", dailyBeta: "0", assignedShift: "SHIFT_2" }
+];
+const legacyDefaultNames = ["Arun", "Kumar", "Priya", "Ravi"];
+const defaultOrder = new Map(defaultStaff.map((person, index) => [person.name, index]));
+
+function normalizeStaff(record: StaffRecord): StaffRecord {
+  return { ...record, monthlySalary: record.monthlySalary ?? "0", dailyBeta: record.dailyBeta ?? "0", assignedShift: record.assignedShift ?? "SHIFT_1" };
+}
+
+function sortStaff(a: StaffRecord, b: StaffRecord) {
+  return (defaultOrder.get(a.name) ?? 999) - (defaultOrder.get(b.name) ?? 999) || (a.assignedShift ?? "SHIFT_1").localeCompare(b.assignedShift ?? "SHIFT_1") || a.name.localeCompare(b.name);
+}
+
+function payrollSettlement(person: StaffRecord, records: AttendanceRecord[], input: SavePayrollInput) {
+  const presentDays = records.filter((record) => record.status === "PRESENT").length;
+  const lateDays = records.filter((record) => record.status === "LATE").length;
+  const absentDays = records.filter((record) => record.status === "ABSENT").length;
+  const leaveDays = records.filter((record) => record.status === "LEAVE").length;
+  const settlement = calculatePayrollSettlement({
+    baseSalary: person.monthlySalary ?? "0", dailyBetaRate: person.dailyBeta ?? "0", eligibleBetaDays: presentDays + lateDays,
+    halfDays: input.halfDays, overtime: input.overtime, attendanceDeduction: input.attendanceDeduction,
+    advances: input.advances, otherDeductions: input.otherDeductions, amountPaid: input.amountPaid
+  });
+  return { presentDays, lateDays, absentDays, leaveDays, ...settlement };
+}
 
 export function createMemoryStaffStore(options: { seedDefaults?: boolean } = {}) {
   const staff = new Map<string, StaffRecord>();
   const attendance = new Map<string, AttendanceRecord>();
   const payroll = new Map<string, PayrollRecord>();
   if (options.seedDefaults) for (const person of defaultStaff) {
-    const now = "2026-09-01T00:00:00.000Z"; const id = person.name.toLowerCase();
+    const now = "2026-09-01T00:00:00.000Z"; const id = `staff-${person.name.toLowerCase()}`;
     staff.set(id, { id, ...person, active: true, createdAt: now, updatedAt: now });
   }
   const store: StaffStore & { clear(): void } = {
     clear() { staff.clear(); attendance.clear(); payroll.clear(); },
-    async listStaff() { return [...staff.values()].sort((a, b) => a.name.localeCompare(b.name)).map((record) => clone({ ...record, monthlySalary: record.monthlySalary ?? "0" })); },
+    async listStaff() { return [...staff.values()].filter((record) => record.active).map(normalizeStaff).sort(sortStaff).map(clone); },
     async addStaff(input) {
       const existing = [...staff.values()].find((record) => record.name.toLowerCase() === input.name.toLowerCase());
       if (existing) return clone(existing);
       const now = new Date().toISOString();
-      const record: StaffRecord = { id: crypto.randomUUID(), ...clone(input), active: true, createdAt: now, updatedAt: now };
+      const record: StaffRecord = { id: crypto.randomUUID(), ...clone(input), monthlySalary: input.monthlySalary ?? "0", dailyBeta: input.dailyBeta ?? "0", assignedShift: input.assignedShift ?? "SHIFT_1", active: true, createdAt: now, updatedAt: now };
       staff.set(record.id, record);
       return clone(record);
     },
     async updateStaff(id, input) {
       const current = staff.get(id); if (!current) throw new Error("Staff member not found");
-      const record = { ...current, ...clone(input), updatedAt: new Date().toISOString() };
+      const record = normalizeStaff({ ...current, ...clone(input), updatedAt: new Date().toISOString() });
       staff.set(id, record); return clone(record);
     },
     async listAttendance(businessDate) {
@@ -65,8 +93,8 @@ export function createMemoryStaffStore(options: { seedDefaults?: boolean } = {})
       const person = staff.get(input.staffId); if (!person) throw new Error("Staff member not found");
       const id = `${input.staffId}:${input.month}`; const existing = payroll.get(id); const now = new Date().toISOString();
       const records = [...attendance.values()].filter((record) => record.staffId === input.staffId && record.businessDate.startsWith(input.month));
-      const settlement = calculatePayrollSettlement({ baseSalary: person.monthlySalary ?? "0", overtime: input.overtime, attendanceDeduction: input.attendanceDeduction, advances: input.advances, otherDeductions: input.otherDeductions, amountPaid: input.amountPaid });
-      const record: PayrollRecord = { id, ...clone(input), staffName: person.name, baseSalary: person.monthlySalary ?? "0", presentDays: records.filter((r) => r.status === "PRESENT").length, lateDays: records.filter((r) => r.status === "LATE").length, absentDays: records.filter((r) => r.status === "ABSENT").length, leaveDays: records.filter((r) => r.status === "LEAVE").length, ...settlement, createdAt: existing?.createdAt ?? now, updatedAt: now };
+      const settlement = payrollSettlement(person, records, input);
+      const record: PayrollRecord = { id, ...clone(input), staffName: person.name, baseSalary: person.monthlySalary ?? "0", ...settlement, createdAt: existing?.createdAt ?? now, updatedAt: now };
       payroll.set(id, record); return clone(record);
     }
   };
@@ -85,17 +113,20 @@ function createMongoStaffStore(): StaffStore {
       const db = await getMongoDatabase(); const collection = db.collection<StoredStaff>("staff");
       await collection.createIndex({ name: 1 }, { unique: true });
       for (const person of defaultStaff) {
-        const existing = await collection.findOne({ name: person.name }); const now = new Date().toISOString();
-        if (!existing) { const id = crypto.randomUUID(); await collection.insertOne({ _id: id, id, ...person, active: true, createdAt: now, updatedAt: now }); }
-        else if (!existing.monthlySalary || existing.monthlySalary === "0") await collection.updateOne({ _id: existing._id }, { $set: { monthlySalary: "18000", updatedAt: now } });
+        const now = new Date().toISOString(); const id = `staff-${person.name.toLowerCase()}`;
+        await collection.updateOne({ name: person.name }, { $setOnInsert: { _id: id, id, ...person, active: true, createdAt: now, updatedAt: now } }, { upsert: true });
+        await collection.updateOne({ name: person.name, assignedShift: { $exists: false } }, { $set: { assignedShift: person.assignedShift as StaffShift, updatedAt: now } });
+        await collection.updateOne({ name: person.name, dailyBeta: { $exists: false } }, { $set: { dailyBeta: person.dailyBeta, updatedAt: now } });
+        await collection.updateOne({ name: person.name, $or: [{ monthlySalary: { $exists: false } }, { monthlySalary: "0" }] }, { $set: { monthlySalary: person.monthlySalary, updatedAt: now } });
       }
+      await collection.updateMany({ name: { $in: legacyDefaultNames }, note: "Initial forecourt operator" }, { $set: { active: false, updatedAt: new Date().toISOString() } });
     })();
     return defaultsReady;
   };
   return {
     async listStaff() {
       await ensureDefaults(); const db = await getMongoDatabase();
-      return (await db.collection<StoredStaff>("staff").find().sort({ name: 1 }).toArray()).map((record) => ({ ...(withoutId(record) as StaffRecord), monthlySalary: record.monthlySalary ?? "0" }));
+      return (await db.collection<StoredStaff>("staff").find({ active: true }).toArray()).map((record) => normalizeStaff(withoutId(record) as StaffRecord)).sort(sortStaff);
     },
     async addStaff(input) {
       const db = await getMongoDatabase();
@@ -103,7 +134,7 @@ function createMongoStaffStore(): StaffStore {
       const existing = await db.collection<StoredStaff>("staff").findOne({ name: input.name });
       if (existing) return withoutId(existing) as StaffRecord;
       const now = new Date().toISOString();
-      const record: StaffRecord = { id: crypto.randomUUID(), ...input, active: true, createdAt: now, updatedAt: now };
+      const record: StaffRecord = { id: crypto.randomUUID(), ...input, monthlySalary: input.monthlySalary ?? "0", dailyBeta: input.dailyBeta ?? "0", assignedShift: input.assignedShift ?? "SHIFT_1", active: true, createdAt: now, updatedAt: now };
       await db.collection<StoredStaff>("staff").insertOne({ ...record, _id: record.id });
       return record;
     },
@@ -111,7 +142,7 @@ function createMongoStaffStore(): StaffStore {
       const db = await getMongoDatabase(); const now = new Date().toISOString();
       const updated = await db.collection<StoredStaff>("staff").findOneAndUpdate({ _id: id }, { $set: { ...input, updatedAt: now } }, { returnDocument: "after" });
       if (!updated) throw new Error("Staff member not found");
-      return { ...(withoutId(updated) as StaffRecord), monthlySalary: updated.monthlySalary ?? "0" };
+      return normalizeStaff(withoutId(updated) as StaffRecord);
     },
     async listAttendance(businessDate) {
       const db = await getMongoDatabase();
@@ -143,8 +174,8 @@ function createMongoStaffStore(): StaffStore {
       if (!person) throw new Error("Staff member not found");
       const id = `${input.staffId}:${input.month}`; const existing = await db.collection<StoredPayroll>("payroll").findOne({ _id: id }); const now = new Date().toISOString();
       const records = await db.collection<StoredAttendance>("attendance").find({ staffId: input.staffId, businessDate: { $regex: `^${input.month}` } }).toArray();
-      const settlement = calculatePayrollSettlement({ baseSalary: person.monthlySalary ?? "0", overtime: input.overtime, attendanceDeduction: input.attendanceDeduction, advances: input.advances, otherDeductions: input.otherDeductions, amountPaid: input.amountPaid });
-      const record: PayrollRecord = { id, ...input, staffName: person.name, baseSalary: person.monthlySalary ?? "0", presentDays: records.filter((r) => r.status === "PRESENT").length, lateDays: records.filter((r) => r.status === "LATE").length, absentDays: records.filter((r) => r.status === "ABSENT").length, leaveDays: records.filter((r) => r.status === "LEAVE").length, ...settlement, createdAt: existing?.createdAt ?? now, updatedAt: now };
+      const settlement = payrollSettlement(normalizeStaff(withoutId(person) as StaffRecord), records, input);
+      const record: PayrollRecord = { id, ...input, staffName: person.name, baseSalary: person.monthlySalary ?? "0", ...settlement, createdAt: existing?.createdAt ?? now, updatedAt: now };
       await db.collection<StoredPayroll>("payroll").replaceOne({ _id: id }, { ...record } as StoredPayroll, { upsert: true }); return record;
     }
   };

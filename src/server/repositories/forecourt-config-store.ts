@@ -27,14 +27,14 @@ const defaultTanks: FuelTank[] = [
 ];
 const layoutDate = "2026-09-01T00:00:00.000Z";
 const defaultStations: FuelStation[] = [
-  ["a_n1", "A-N1", 1, "pump-a", "A", "A-S1", "Side 1", "petrol", "petrol_tank"],
-  ["a_n2", "A-N2", 2, "pump-a", "A", "A-S2", "Side 2", "petrol", "petrol_tank"],
-  ["a_n3", "A-N3", 3, "pump-a", "A", "A-S1", "Side 1", "diesel", "diesel_tank"],
-  ["a_n4", "A-N4", 4, "pump-a", "A", "A-S2", "Side 2", "diesel", "diesel_tank"],
-  ["b_n1", "B-N1", 1, "pump-b", "B", "B-S1", "Side 1", "petrol", "petrol_tank"],
-  ["b_n2", "B-N2", 2, "pump-b", "B", "B-S2", "Side 2", "petrol", "petrol_tank"],
-  ["b_n3", "B-N3", 3, "pump-b", "B", "B-S1", "Side 1", "diesel", "diesel_tank"],
-  ["b_n4", "B-N4", 4, "pump-b", "B", "B-S2", "Side 2", "diesel", "diesel_tank"]
+  ["a_n1", "P2-N1", 1, "pump-2", "2", "P2-S1", "Side 1", "petrol", "petrol_tank"],
+  ["a_n2", "P2-N2", 2, "pump-2", "2", "P2-S2", "Side 2", "petrol", "petrol_tank"],
+  ["a_n3", "P2-N3", 3, "pump-2", "2", "P2-S1", "Side 1", "diesel", "diesel_tank"],
+  ["a_n4", "P2-N4", 4, "pump-2", "2", "P2-S2", "Side 2", "diesel", "diesel_tank"],
+  ["b_n1", "P3-N1", 1, "pump-3", "3", "P3-S1", "Side 1", "petrol", "petrol_tank"],
+  ["b_n2", "P3-N2", 2, "pump-3", "3", "P3-S2", "Side 2", "petrol", "petrol_tank"],
+  ["b_n3", "P3-N3", 3, "pump-3", "3", "P3-S1", "Side 1", "diesel", "diesel_tank"],
+  ["b_n4", "P3-N4", 4, "pump-3", "3", "P3-S2", "Side 2", "diesel", "diesel_tank"]
 ].map(([id, code, nozzleNumber, dispenserId, dispenserCode, sideId, sideLabel, productId, tankId], displayOrder) => ({
   id: String(id), code: String(code), name: `Pump ${dispenserCode} nozzle ${nozzleNumber}`,
   productId: String(productId), tankId: String(tankId), totalizerPrecision: 3,
@@ -115,7 +115,7 @@ async function ensureMongoConfig() {
         ...defaultProducts.map((item) => database.collection<FuelProduct>("fuelProducts").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true })),
         ...defaultTanks.map((item) => database.collection<FuelTank>("fuelTanks").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true })),
         database.collection<FuelStation>("fuelStations").updateMany({ id: { $in: ["petrol_1", "diesel_1"] } }, { $set: { active: false, updatedAt: layoutDate } }),
-        ...defaultStations.map((item) => database.collection<FuelStation>("fuelStations").updateOne({ id: item.id }, { $setOnInsert: item }, { upsert: true }))
+        ...defaultStations.map((item) => database.collection<FuelStation>("fuelStations").updateOne({ id: item.id }, { $set: item }, { upsert: true }))
       ]);
       const xpPattern = /^(XP\s?(95|100)|X\s?(95|100))/i;
       const xpProducts = await database.collection<FuelProduct>("fuelProducts").find({ $or: [{ code: xpPattern }, { name: xpPattern }] }).project<{ id: string }>({ id: 1, _id: 0 }).toArray();
