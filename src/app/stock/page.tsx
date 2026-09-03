@@ -2,6 +2,7 @@ import { ArrowRight, Boxes, Droplets, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/ui/page-header";
+import { FuelReceiptList } from "@/components/stock/fuel-receipt-list";
 import { TankStockEditor } from "@/components/stock/tank-stock-editor";
 import { businessDate } from "@/lib/business-time";
 import { listExpenses, listFuelReceipts } from "@/server/repositories/journal-store";
@@ -21,7 +22,7 @@ export default async function StockPage() {
   const [shifts, expenses, receipts, configuration] = await Promise.all([
     getOperationsRepository().listShifts(),
     listExpenses(),
-    listFuelReceipts(),
+    listFuelReceipts({ includeVoided: true }),
     getForecourtConfigStore().getConfiguration()
   ]);
   const dashboard = buildDashboardViewModel({ shifts, expenses, configuration });
@@ -57,7 +58,7 @@ export default async function StockPage() {
       </section>
       <section className="panel panel-pad reveal reveal-4" style={{ marginTop: 16 }}>
         <div className="panel-header"><div><p className="panel-kicker">Delivery ledger</p><h2 className="panel-title">Recent fuel receipts</h2></div><Link className="button soft" href="/stock/receipts/new"><Plus size={14} /> Receive fuel</Link></div>
-        {receipts.length ? <table className="data-table"><thead><tr><th>Invoice</th><th>Product</th><th>Accepted</th><th>Density @15°C</th><th>Supplier</th></tr></thead><tbody>{receipts.slice(0, 12).map((receipt) => <tr key={receipt.id}><td><span className="table-title">{receipt.invoiceNumber}</span><span className="table-subtitle">{receipt.tankerNumber}</span></td><td>{configuration.products.find((product) => product.id === receipt.product)?.name ?? receipt.product}</td><td className="mono">{Number(receipt.acceptedQuantity).toLocaleString("en-IN")} L</td><td className="mono">{receipt.observedDensity}</td><td>{receipt.supplier}</td></tr>)}</tbody></table> : <p className="empty-state">No fuel receipt has been recorded yet.</p>}
+        <FuelReceiptList products={configuration.products} receipts={receipts} />
       </section>
     </main>
   );

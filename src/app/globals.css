@@ -144,7 +144,15 @@ textarea:focus-visible {
 .button.soft { color: var(--petrol-deep); background: var(--petrol-pale); border-color: transparent; }
 .button.ghost { background: transparent; }
 .button.block { width: 100%; }
+.button.danger { color: #743e3e; background: var(--rose-pale); border-color: transparent; }
 .button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.voided-row { opacity: .55; }
+.table-actions { white-space: nowrap; }
+.receipt-row-actions { display: inline-flex; align-items: center; gap: 8px; }
+.void-receipt-prompt { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.void-receipt-prompt input { padding: 6px 10px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; min-width: 160px; }
+.form-error-inline { color: #743e3e; width: 100%; text-align: right; }
 
 .panel {
   background: rgba(251, 250, 246, 0.92);
@@ -734,6 +742,7 @@ body {
 .product-result-row { display:flex;flex-wrap:wrap;gap:10px;padding:16px 20px; }.product-result-row span { display:grid;min-width:200px;padding:10px 12px;border-radius:10px;background:#f4f8f7; }.product-result-row small { color:#788681; }
 .daily-sticky-action { position:static;z-index:12;display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:18px;padding:14px 16px 14px 20px;border:1px solid rgba(21,62,52,.18);border-radius:18px;background:rgba(255,255,255,.96);box-shadow:0 14px 38px rgba(11,45,37,.11); }
 .daily-sticky-action>span { display:grid; }.daily-sticky-action small { color:#75837e; }.daily-sticky-action .form-actions { margin:0; }
+.draft-saved-indicator { display:flex;align-items:center;gap:6px;font-size:12px;color:#3f8f6e;white-space:nowrap; }
 @media (max-width:1180px) { .pump-deck{grid-template-columns:1fr} }
 @media (max-width:780px) { .daily-page{padding-left:13px;padding-right:13px}.day-command{align-items:flex-start;padding:22px 18px}.day-command h1{font-size:39px}.day-status{justify-items:start}.daily-price-deck{grid-template-columns:1fr}.price-ticket,.daily-price-deck.compact .price-ticket{grid-template-columns:1fr 1fr}.price-ticket>div{grid-column:1/-1}.price-ticket label:last-child{grid-column:1/-1}.pump-sides{grid-template-columns:1fr}.pump-side+.pump-side{border-left:0;border-top:1px dashed #ccd9d5}.tank-ribbon{grid-template-columns:1fr}.side-result-grid{grid-template-columns:1fr}.side-result-grid article:nth-child(odd){border-right:0}.daily-sticky-action{bottom:77px;align-items:stretch;flex-direction:column}.daily-sticky-action .form-actions{display:grid;grid-template-columns:1fr;width:100%}.daily-sticky-action .button{justify-content:center} }
 @media (max-width:480px) { .day-command{display:grid}.price-ticket{grid-template-columns:1fr}.price-ticket label:last-child{grid-column:auto}.nozzle-entry{grid-template-columns:auto 1fr}.nozzle-entry .input-wrap{grid-column:1/-1}.collection-grid{grid-template-columns:1fr 1fr}.side-result-grid dl{grid-template-columns:1fr 1fr} }

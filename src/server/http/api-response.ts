@@ -18,13 +18,14 @@ export function apiError(error: unknown) {
     );
   }
   const message = error instanceof Error ? error.message : "";
-  if (message === "Shift not found") {
+  if (message === "Shift not found" || message === "Fuel receipt not found") {
     return NextResponse.json({ error: message, code: "NOT_FOUND", requestId }, { status: 404 });
   }
   if (
     message === "Shift is already closed" ||
     message === "Close the active shift before opening another" ||
     message === "Closed shifts are immutable in v1" ||
+    message === "Fuel receipt has already been voided" ||
     message.startsWith("Shift changed on another device") ||
     message.startsWith("Tank stock changed on another device") ||
     message.startsWith("Tank stock changed while closing") ||

@@ -1,10 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DailyForecourtSheet } from "@/components/day/daily-forecourt-sheet";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+beforeEach(() => localStorage.clear());
+afterEach(() => vi.unstubAllGlobals());
 
 const station = (pump: "A" | "B", nozzle: number) => {
   const petrol = nozzle <= 2;
@@ -152,5 +154,103 @@ describe("DailyForecourtSheet", () => {
     expect(screen.queryByText("Nundefined")).not.toBeInTheDocument();
     expect(screen.queryByText("NP1")).not.toBeInTheDocument();
     expect(screen.getAllByText("P1").length).toBeGreaterThan(0);
+  });
+
+  describe("draft persistence", () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const products = [{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }];
+    const staff = [{ id: "arun", name: "Arun", monthlySalary: "18000" }];
+    const tanks = [{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }];
+
+    it("keeps the opening form filled in after the page is left and revisited", async () => {
+      const user = userEvent.setup();
+      const props = { attendance: [], businessDate: "2026-09-01", previousReadings: {}, products, staff, stations, tanks };
+      const { unmount } = render(<DailyForecourtSheet {...props} />);
+
+      await user.selectOptions(screen.getByRole("combobox", { name: "Pump A operator" }), "arun");
+      const openingOne = screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" });
+      await user.clear(openingOne); await user.type(openingOne, "555");
+      const tankStock = screen.getByRole("spinbutton", { name: "Petrol Tank opening stock" });
+      await user.clear(tankStock); await user.type(tankStock, "8000");
+
+      unmount();
+      render(<DailyForecourtSheet {...props} />);
+
+      expect(screen.getByRole("combobox", { name: "Pump A operator" })).toHaveValue("arun");
+      expect(screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" })).toHaveValue(555);
+      expect(screen.getByRole("spinbutton", { name: "Petrol Tank opening stock" })).toHaveValue(8000);
+    });
+
+    it("clears the opening draft once the business day actually starts", async () => {
+      const user = userEvent.setup();
+      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "shift-new" }) })));
+      vi.stubGlobal("crypto", { randomUUID: () => "request-1" });
+      const props = { attendance: [], businessDate: "2026-09-01", previousReadings: {}, products, staff, stations, tanks };
+      render(<DailyForecourtSheet {...props} />);
+
+      await user.selectOptions(screen.getByRole("combobox", { name: "Pump A operator" }), "arun");
+      for (const code of ["A-N1", "A-N2", "A-N3", "A-N4"]) {
+        const field = screen.getByRole("spinbutton", { name: `${code} opening totalizer` });
+        await user.clear(field); await user.type(field, "100");
+      }
+      expect(localStorage.getItem("forecourt-draft:opening:2026-09-01")).not.toBeNull();
+
+      await user.click(screen.getByRole("button", { name: /start business day/i }));
+
+      await waitFor(() => expect(localStorage.getItem("forecourt-draft:opening:2026-09-01")).toBeNull());
+    });
+
+    it("keeps the closing form filled in after the page is left and revisited", async () => {
+      const user = userEvent.setup();
+      const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
+      const props = { attendance: [], businessDate: "2026-09-01", previousReadings: {}, products, staff, stations, tanks, activeShift };
+      const { unmount } = render(<DailyForecourtSheet {...props} />);
+
+      const closingOne = screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" });
+      await user.type(closingOne, "150");
+      const returnedCheckbox = screen.getAllByRole("checkbox", { name: /returned/i })[0];
+      await user.click(returnedCheckbox);
+      const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
+      await user.clear(cashField); await user.type(cashField, "4500");
+      const variance = screen.getByLabelText("Variance explanation");
+      await user.type(variance, "Till was short by mistake");
+
+      unmount();
+      render(<DailyForecourtSheet {...props} />);
+
+      expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
+      expect(screen.getAllByRole("checkbox", { name: /returned/i })[0]).toBeChecked();
+      expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(4500);
+      expect(screen.getByLabelText("Variance explanation")).toHaveValue("Till was short by mistake");
+    });
+
+    it("clears the closing draft once the business day is actually closed", async () => {
+      const user = userEvent.setup();
+      const preview = { sales: { expectedSales: "0.00", accountedTender: "0.00", tenderVariance: "0.00", expectedCashHandover: "0.00", cashVariance: "0.00" }, nozzles: {}, tanks: {}, sides: [], products: [], staff: [], grossMargin: "0.00", estimatedOperatingProfit: "0.00" };
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        if (url.endsWith("/preview")) return { ok: true, json: async () => preview };
+        if (url.endsWith("/close")) return { ok: true, json: async () => ({ id: "shift-1", reconciliation: preview }) };
+        return { ok: true, json: async () => ({}) };
+      }));
+      vi.stubGlobal("crypto", { randomUUID: () => "request-1" });
+      const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
+      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={activeShift} />);
+
+      for (const code of ["A-N1", "A-N2", "A-N3", "A-N4"]) {
+        const field = screen.getByRole("spinbutton", { name: `${code} closing totalizer` });
+        await user.type(field, "150");
+      }
+      for (const tank of tanks) {
+        const field = screen.getByRole("spinbutton", { name: `${tank.name} closing stock` });
+        await user.clear(field); await user.type(field, tank.currentStock);
+      }
+      expect(localStorage.getItem("forecourt-draft:closing:shift-1")).not.toBeNull();
+
+      await user.click(screen.getByRole("button", { name: /review closing/i }));
+      await waitFor(() => expect(screen.getByRole("button", { name: /close day/i })).toBeEnabled());
+      await user.click(screen.getByRole("button", { name: /close day/i }));
+
+      await waitFor(() => expect(localStorage.getItem("forecourt-draft:closing:shift-1")).toBeNull());
+    });
   });
 });

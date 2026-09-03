@@ -111,6 +111,14 @@ export const fuelReceiptSchema = z.object({
   note: z.string().max(500).optional()
 });
 
+export const fuelReceiptUpdateSchema = fuelReceiptSchema.omit({ product: true, tankId: true }).extend({
+  reason: z.string().trim().min(2).max(300)
+});
+
+export const fuelReceiptVoidSchema = z.object({
+  reason: z.string().trim().min(2).max(300)
+});
+
 export const fuelProductSchema = z.object({
   code: z.string().trim().min(1).max(20),
   name: z.string().trim().min(2).max(80),
