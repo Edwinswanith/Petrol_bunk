@@ -61,6 +61,14 @@ export const activeShiftCorrectionSchema = z.object({
   reason: z.string().trim().max(300).optional()
 });
 
+export const shiftPumpProgressSchema = z.object({
+  shiftStartTime: z.string().trim().max(20).optional(),
+  shiftEndTime: z.string().trim().max(20).optional(),
+  closingNozzleReadings: z.record(z.string(), decimal),
+  nonSaleDispenses: z.array(z.object({ nozzleId: z.string().min(1), volume: decimal, returnedToTank: z.boolean() })),
+  collections: z.object({ cash: decimal, upi: decimal, card: decimal, credit: decimal, other: decimal, declaredCashHandover: decimal }).optional()
+});
+
 export const staffSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(20).optional().default(""),

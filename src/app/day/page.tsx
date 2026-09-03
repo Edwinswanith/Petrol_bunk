@@ -34,7 +34,7 @@ export default async function DailyForecourtPage() {
   });
 
   return <main className="page daily-page"><DailyForecourtSheet
-    activeShift={active ? { id: active.id, name: active.name, businessDate: active.businessDate, startedAt: active.startedAt, openingNozzleReadings: active.openingNozzleReadings, openingTankStocks: active.openingTankStocks, staffAssignments: active.staffAssignments ?? [] } : undefined}
+    activeShift={active ? { id: active.id, name: active.name, businessDate: active.businessDate, startedAt: active.startedAt, openingNozzleReadings: active.openingNozzleReadings, openingTankStocks: active.openingTankStocks, staffAssignments: active.staffAssignments ?? [], pumpProgress: active.pumpProgress } : undefined}
     attendance={attendance}
     businessDate={active?.businessDate ?? today}
     previousReadings={carryForward.readings}

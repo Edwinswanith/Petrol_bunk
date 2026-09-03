@@ -2,6 +2,7 @@ import type {
   ActiveShiftCorrectionInput,
   CloseShiftInput,
   OpenShiftInput,
+  PumpProgressInput,
   ShiftRecord
 } from "@/server/domain/operations";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
@@ -219,6 +220,16 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       for (const [productId, rate] of Object.entries(input.productRates ?? {})) {
         try { await getForecourtConfigStore().updateProductPrice(productId, { ...rate, marketReferencePrice: rate.sellingPricePerLitre }); } catch { /* Snapshot-only custom test data. */ }
       }
+      return clone(updated);
+    },
+
+    async saveShiftPumpProgress(id: string, pumpId: string, input: PumpProgressInput): Promise<ShiftRecord> {
+      const shift = shifts.get(id);
+      if (!shift) throw new Error("Shift not found");
+      if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
+      const entry = { pumpId, ...input, savedAt: new Date().toISOString() };
+      const updated = { ...shift, pumpProgress: { ...(shift.pumpProgress ?? {}), [pumpId]: entry }, version: shift.version + 1 };
+      shifts.set(id, updated);
       return clone(updated);
     },
 

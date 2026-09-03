@@ -69,6 +69,28 @@ export type ActiveShiftCorrectionInput = {
   reason?: string;
 };
 
+export type PumpProgressCollections = {
+  cash: string;
+  upi: string;
+  card: string;
+  credit: string;
+  other: string;
+  declaredCashHandover: string;
+};
+
+export type PumpProgressInput = {
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  closingNozzleReadings: Record<string, string>;
+  nonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
+  collections?: PumpProgressCollections;
+};
+
+export type PumpProgressEntry = PumpProgressInput & {
+  pumpId: string;
+  savedAt: string;
+};
+
 export type ShiftCorrection = {
   id: string; correctedAt: string; reason: string;
   previousOpeningNozzleReadings: Record<string, string>; revisedOpeningNozzleReadings: Record<string, string>;
@@ -166,4 +188,5 @@ export type ShiftRecord = OpenShiftInput & {
   reconciliation?: ShiftReconciliation;
   varianceExplanation?: string;
   corrections?: ShiftCorrection[];
+  pumpProgress?: Record<string, PumpProgressEntry>;
 };
