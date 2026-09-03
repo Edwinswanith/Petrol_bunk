@@ -135,8 +135,6 @@ describe("DailyForecourtSheet", () => {
     const dieselTestFuel = screen.getByLabelText("Pump A diesel test fuel");
     expect(dieselTestFuel).toHaveTextContent("5.000 L");
     expect(dieselTestFuel).toHaveTextContent("₹502.50");
-
-    expect(screen.getByText(/expected ₹18,872.50/)).toBeInTheDocument();
   });
 
   it("hides the test fuel note when no nozzle has a test dispense", () => {
@@ -190,6 +188,45 @@ describe("DailyForecourtSheet", () => {
     callouts.forEach((callout) => {
       expect(callout).toHaveClass("variance-callout", "unbalanced");
     });
+  });
+
+  it("colours the review variance callouts green when the shift has a surplus instead of a shortfall", async () => {
+    const user = userEvent.setup();
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const preview = { sales: { expectedSales: "1000.00", accountedTender: "1300.00", tenderVariance: "300.00", expectedCashHandover: "1300.00", cashVariance: "300.00" }, nozzles: {}, tanks: {}, sides: [], products: [], staff: [], grossMargin: "0.00", estimatedOperatingProfit: "0.00" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/preview")) return { ok: true, json: async () => preview };
+      return { ok: true, json: async () => ({}) };
+    }));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    await user.click(screen.getByRole("button", { name: /review closing/i }));
+
+    const callouts = await screen.findAllByText(/tender variance|cash variance/i);
+    expect(callouts.length).toBeGreaterThanOrEqual(2);
+    callouts.forEach((callout) => {
+      expect(callout).toHaveClass("variance-callout", "balanced");
+      expect(callout).not.toHaveClass("unbalanced");
+    });
+  });
+
+  it("shows entered cash prominently in Collections without an expected figure, and colours the variance by its sign", async () => {
+    const user = userEvent.setup();
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    expect(screen.queryByText(/expected ₹/)).not.toBeInTheDocument();
+
+    const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
+    await user.clear(cashField);
+    await user.type(cashField, "500");
+
+    const entered = screen.getByText("₹500.00 entered");
+    expect(entered).toHaveClass("entered-callout");
+
+    const variance = screen.getByText(/variance$/);
+    expect(variance).toHaveClass("variance-callout", "balanced");
+    expect(variance).not.toHaveClass("unbalanced");
   });
 
   describe("draft persistence", () => {
