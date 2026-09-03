@@ -156,6 +156,25 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getAllByText("P1").length).toBeGreaterThan(0);
   });
 
+  it("shows a large, colour-coded variance callout so a mismatch is easy to notice after reviewing", async () => {
+    const user = userEvent.setup();
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const preview = { sales: { expectedSales: "1000.00", accountedTender: "700.00", tenderVariance: "-300.00", expectedCashHandover: "700.00", cashVariance: "-300.00" }, nozzles: {}, tanks: {}, sides: [], products: [], staff: [], grossMargin: "0.00", estimatedOperatingProfit: "0.00" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/preview")) return { ok: true, json: async () => preview };
+      return { ok: true, json: async () => ({}) };
+    }));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    await user.click(screen.getByRole("button", { name: /review closing/i }));
+
+    const callouts = await screen.findAllByText(/tender variance|cash variance/i);
+    expect(callouts.length).toBeGreaterThanOrEqual(2);
+    callouts.forEach((callout) => {
+      expect(callout).toHaveClass("variance-callout", "unbalanced");
+    });
+  });
+
   describe("draft persistence", () => {
     const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
     const products = [{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }];
@@ -209,6 +228,7 @@ describe("DailyForecourtSheet", () => {
       const closingOne = screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" });
       await user.type(closingOne, "150");
       const returnedCheckbox = screen.getAllByRole("checkbox", { name: /returned/i })[0];
+      expect(returnedCheckbox).toBeChecked();
       await user.click(returnedCheckbox);
       const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
       await user.clear(cashField); await user.type(cashField, "4500");
@@ -219,7 +239,7 @@ describe("DailyForecourtSheet", () => {
       render(<DailyForecourtSheet {...props} />);
 
       expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
-      expect(screen.getAllByRole("checkbox", { name: /returned/i })[0]).toBeChecked();
+      expect(screen.getAllByRole("checkbox", { name: /returned/i })[0]).not.toBeChecked();
       expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(4500);
       expect(screen.getByLabelText("Variance explanation")).toHaveValue("Till was short by mistake");
     });
@@ -251,6 +271,16 @@ describe("DailyForecourtSheet", () => {
       await user.click(screen.getByRole("button", { name: /close day/i }));
 
       await waitFor(() => expect(localStorage.getItem("forecourt-draft:closing:shift-1")).toBeNull());
+    });
+
+    it("keeps test fuel marked as returned by default even when an older saved draft has no returned choices recorded", () => {
+      localStorage.setItem("forecourt-draft:closing:shift-1", JSON.stringify({ testFuel: {}, testFuelReturned: {} }));
+      const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
+      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={activeShift} />);
+
+      for (const checkbox of screen.getAllByRole("checkbox", { name: /returned/i })) {
+        expect(checkbox).toBeChecked();
+      }
     });
   });
 });
