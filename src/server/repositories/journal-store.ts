@@ -5,7 +5,7 @@ import type { expenseSchema, fuelReceiptSchema, fuelReceiptUpdateSchema } from "
 import { getMongoDatabase, hasMongoConfiguration } from "@/server/db/mongo-client";
 import { getMongoClient } from "@/server/db/mongo-client";
 import Decimal from "decimal.js";
-import type { FuelTank, InventoryMovement } from "@/server/domain/forecourt";
+import type { FuelProduct, FuelTank, InventoryMovement } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 
 type ExpenseInput = z.infer<typeof expenseSchema>;
@@ -83,6 +83,12 @@ export async function listExpenses() {
   return globalThis.forecourtExpenses ?? [];
 }
 
+function blendedCostPerLitre(stockBeforeDelivery: string, costPerLitreBeforeDelivery: string, deliveredQuantity: string, deliveredTotalCost: string) {
+  const totalQuantity = new Decimal(stockBeforeDelivery).plus(deliveredQuantity);
+  if (!totalQuantity.greaterThan(0)) return costPerLitreBeforeDelivery;
+  return new Decimal(stockBeforeDelivery).times(costPerLitreBeforeDelivery).plus(deliveredTotalCost).dividedBy(totalQuantity).toDecimalPlaces(2).toFixed(2);
+}
+
 export async function saveFuelReceipt(input: FuelReceiptInput, idempotencyKey: string, shiftId?: string) {
   if (hasMongoConfiguration()) {
     await ensureJournalIndexes();
@@ -99,10 +105,14 @@ export async function saveFuelReceipt(input: FuelReceiptInput, idempotencyKey: s
         const tank = await database.collection<FuelTank>("fuelTanks").findOne({ id: input.tankId, active: true }, { session });
         if (!tank) throw new Error("Fuel tank not found");
         if (tank.productId !== input.product) throw new Error("Receipt product must match the selected tank");
+        const product = await database.collection<FuelProduct>("fuelProducts").findOne({ id: input.product, active: true }, { session });
+        if (!product) throw new Error("Fuel product not found");
         const record: FuelReceiptRecord = { ...input, id: crypto.randomUUID(), createdAt: new Date().toISOString(), idempotencyKey, shiftId };
         const balanceAfter = new Decimal(tank.currentStock).plus(input.acceptedQuantity).toDecimalPlaces(3).toFixed(3);
+        const averageCostPerLitre = blendedCostPerLitre(tank.currentStock, product.costPricePerLitre, input.acceptedQuantity, input.landedCost);
         await collection.insertOne(record, { session });
         await database.collection<FuelTank>("fuelTanks").updateOne({ id: tank.id }, { $set: { currentStock: balanceAfter, updatedAt: record.createdAt } }, { session });
+        await database.collection<FuelProduct>("fuelProducts").updateOne({ id: product.id }, { $set: { costPricePerLitre: averageCostPerLitre, updatedAt: record.createdAt } }, { session });
         await database.collection<InventoryMovement>("inventoryMovements").insertOne({
           id: crypto.randomUUID(), tankId: tank.id, productId: tank.productId, type: "FUEL_RECEIPT",
           quantity: new Decimal(input.acceptedQuantity).toDecimalPlaces(3).toFixed(3), balanceAfter,
@@ -130,8 +140,12 @@ export async function saveFuelReceipt(input: FuelReceiptInput, idempotencyKey: s
   const tank = configuration.tanks.find((item) => item.id === input.tankId && item.active);
   if (!tank) throw new Error("Fuel tank not found");
   if (tank.productId !== input.product) throw new Error("Receipt product must match the selected tank");
+  const product = configuration.products.find((item) => item.id === input.product && item.active);
+  if (!product) throw new Error("Fuel product not found");
   const balanceAfter = new Decimal(tank.currentStock).plus(input.acceptedQuantity).toDecimalPlaces(3).toFixed(3);
+  const averageCostPerLitre = blendedCostPerLitre(tank.currentStock, product.costPricePerLitre, input.acceptedQuantity, input.landedCost);
   await configStore.setTankStock(tank.id, balanceAfter);
+  await configStore.updateProductPrice(product.id, { sellingPricePerLitre: product.sellingPricePerLitre, costPricePerLitre: averageCostPerLitre, marketReferencePrice: product.marketReferencePrice });
   globalThis.forecourtReceiptInventoryMovements ??= [];
   globalThis.forecourtReceiptInventoryMovements.unshift({
     id: crypto.randomUUID(), tankId: tank.id, productId: tank.productId, type: "FUEL_RECEIPT",

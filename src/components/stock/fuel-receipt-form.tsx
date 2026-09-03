@@ -21,7 +21,10 @@ export function FuelReceiptForm({ products = fallbackProducts, tanks = fallbackT
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [acceptedQuantity, setAcceptedQuantity] = useState("");
+  const [landedCost, setLandedCost] = useState("");
   const idempotencyKey = useRef<string | null>(null);
+  const derivedCostPerLitre = Number(acceptedQuantity) > 0 && Number(landedCost) > 0 ? Number(landedCost) / Number(acceptedQuantity) : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,10 +65,10 @@ export function FuelReceiptForm({ products = fallbackProducts, tanks = fallbackT
         <div className="form-grid three">
           <label className="field"><span>Target tank</span><select name="tankId" required>{productTanks.map((tank) => <option key={tank.id} value={tank.id}>{tank.name} · {tank.currentStock} L available</option>)}</select></label>
           <label className="field"><span>Invoice quantity</span><span className="input-wrap"><input min="0.001" name="invoiceQuantity" required step="0.001" type="number" /><span className="unit">L</span></span></label>
-          <label className="field"><span>Accepted quantity</span><span className="input-wrap"><input min="0.001" name="acceptedQuantity" required step="0.001" type="number" /><span className="unit">L</span></span></label>
+          <label className="field"><span>Accepted quantity</span><span className="input-wrap"><input min="0.001" name="acceptedQuantity" onChange={(event) => setAcceptedQuantity(event.target.value)} required step="0.001" type="number" value={acceptedQuantity} /><span className="unit">L</span></span></label>
           <label className="field"><span>Invoice density @15°C</span><input min="0.001" name="invoiceDensity" required step="0.001" type="number" /></label>
           <label className="field"><span>Observed density @15°C</span><input min="0.001" name="observedDensity" required step="0.001" type="number" /></label>
-          <label className="field"><span>Landed cost / litre</span><span className="input-wrap"><input min="0.01" name="landedCost" required step="0.01" type="number" /><span className="unit">₹</span></span></label>
+          <label className="field"><span>Total landed cost</span><span className="input-wrap"><input min="0.01" name="landedCost" onChange={(event) => setLandedCost(event.target.value)} required step="0.01" type="number" value={landedCost} /><span className="unit">₹</span></span>{derivedCostPerLitre !== null ? <small className="field-help">≈ ₹{derivedCostPerLitre.toFixed(2)} / litre</small> : null}</label>
           <label className="field full"><span>Receipt note</span><textarea name="note" placeholder="Seal, compartment or shortage notes" /></label>
         </div>
       </section>

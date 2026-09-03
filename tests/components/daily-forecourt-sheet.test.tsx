@@ -187,6 +187,7 @@ describe("DailyForecourtSheet", () => {
     expect(callouts.length).toBeGreaterThanOrEqual(2);
     callouts.forEach((callout) => {
       expect(callout).toHaveClass("variance-callout", "unbalanced");
+      expect(callout.textContent).toMatch(/^-₹300\.00/);
     });
   });
 
@@ -207,6 +208,7 @@ describe("DailyForecourtSheet", () => {
     callouts.forEach((callout) => {
       expect(callout).toHaveClass("variance-callout", "balanced");
       expect(callout).not.toHaveClass("unbalanced");
+      expect(callout.textContent).toMatch(/^\+₹300\.00/);
     });
   });
 
@@ -227,6 +229,7 @@ describe("DailyForecourtSheet", () => {
     const variance = screen.getByText(/variance$/);
     expect(variance).toHaveClass("variance-callout", "balanced");
     expect(variance).not.toHaveClass("unbalanced");
+    expect(variance.textContent).toBe("+₹500.00 variance");
   });
 
   describe("draft persistence", () => {

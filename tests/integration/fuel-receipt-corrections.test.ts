@@ -6,7 +6,7 @@ import { listFuelReceipts, saveFuelReceipt, updateFuelReceipt, voidFuelReceipt }
 const RECEIPT = {
   supplier: "IndianOil", invoiceNumber: "INV-1001", tankerNumber: "TN 01 AB 1234",
   product: "petrol", tankId: "petrol_tank", invoiceQuantity: "1000", acceptedQuantity: "1000",
-  invoiceDensity: "0.745", observedDensity: "0.744", landedCost: "95.00"
+  invoiceDensity: "0.745", observedDensity: "0.744", landedCost: "95000.00"
 };
 
 describe("fuel receipt corrections", () => {

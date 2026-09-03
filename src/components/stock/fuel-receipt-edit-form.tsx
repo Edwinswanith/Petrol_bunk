@@ -14,6 +14,9 @@ export function FuelReceiptEditForm({ receipt, productName, tankName }: { receip
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [acceptedQuantity, setAcceptedQuantity] = useState(receipt.acceptedQuantity);
+  const [landedCost, setLandedCost] = useState(receipt.landedCost);
+  const derivedCostPerLitre = Number(acceptedQuantity) > 0 && Number(landedCost) > 0 ? Number(landedCost) / Number(acceptedQuantity) : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,10 +55,10 @@ export function FuelReceiptEditForm({ receipt, productName, tankName }: { receip
         <div className="form-section-heading"><span className="step-number">2</span><div><h2>Quantity and quality</h2><p>Correcting the accepted quantity adjusts the tank balance by the difference.</p></div></div>
         <div className="form-grid three">
           <label className="field"><span>Invoice quantity</span><span className="input-wrap"><input defaultValue={receipt.invoiceQuantity} min="0.001" name="invoiceQuantity" required step="0.001" type="number" /><span className="unit">L</span></span></label>
-          <label className="field"><span>Accepted quantity</span><span className="input-wrap"><input defaultValue={receipt.acceptedQuantity} min="0.001" name="acceptedQuantity" required step="0.001" type="number" /><span className="unit">L</span></span></label>
+          <label className="field"><span>Accepted quantity</span><span className="input-wrap"><input min="0.001" name="acceptedQuantity" onChange={(event) => setAcceptedQuantity(event.target.value)} required step="0.001" type="number" value={acceptedQuantity} /><span className="unit">L</span></span></label>
           <label className="field"><span>Invoice density @15°C</span><input defaultValue={receipt.invoiceDensity} min="0.001" name="invoiceDensity" required step="0.001" type="number" /></label>
           <label className="field"><span>Observed density @15°C</span><input defaultValue={receipt.observedDensity} min="0.001" name="observedDensity" required step="0.001" type="number" /></label>
-          <label className="field"><span>Landed cost / litre</span><span className="input-wrap"><input defaultValue={receipt.landedCost} min="0.01" name="landedCost" required step="0.01" type="number" /><span className="unit">₹</span></span></label>
+          <label className="field"><span>Total landed cost</span><span className="input-wrap"><input min="0.01" name="landedCost" onChange={(event) => setLandedCost(event.target.value)} required step="0.01" type="number" value={landedCost} /><span className="unit">₹</span></span>{derivedCostPerLitre !== null ? <small className="field-help">≈ ₹{derivedCostPerLitre.toFixed(2)} / litre</small> : null}</label>
           <label className="field full"><span>Receipt note</span><textarea defaultValue={receipt.note} name="note" placeholder="Seal, compartment or shortage notes" /></label>
           <label className="field full"><span>Reason for this correction</span><input maxLength={300} name="reason" placeholder="Why is this receipt being corrected?" required /></label>
         </div>
