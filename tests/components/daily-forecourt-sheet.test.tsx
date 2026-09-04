@@ -145,7 +145,7 @@ describe("DailyForecourtSheet", () => {
     expect(screen.queryByLabelText("Pump A diesel test fuel")).not.toBeInTheDocument();
   });
 
-  it("only shows the Returned checkbox once a test fuel amount has actually been entered", async () => {
+  it("never shows a Returned-to-tank checkbox — test fuel is assumed returned automatically", async () => {
     const user = userEvent.setup();
     const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
@@ -155,11 +155,8 @@ describe("DailyForecourtSheet", () => {
     const testFuelField = screen.getByRole("spinbutton", { name: "A-N1 test fuel" });
     await user.clear(testFuelField);
     await user.type(testFuelField, "5");
-    expect(screen.getByRole("checkbox", { name: "A-N1 returned to tank" })).toBeChecked();
 
-    await user.clear(testFuelField);
-    await user.type(testFuelField, "0");
-    expect(screen.queryByRole("checkbox", { name: "A-N1 returned to tank" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox", { name: /returned/i })).toHaveLength(0);
   });
 
   it("uses the station code when legacy station data has no nozzle number", () => {
@@ -286,9 +283,6 @@ describe("DailyForecourtSheet", () => {
       await user.type(closingOne, "150");
       const testFuelField = screen.getByRole("spinbutton", { name: "A-N1 test fuel" });
       await user.clear(testFuelField); await user.type(testFuelField, "5");
-      const returnedCheckbox = screen.getAllByRole("checkbox", { name: /returned/i })[0];
-      expect(returnedCheckbox).toBeChecked();
-      await user.click(returnedCheckbox);
       const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
       await user.clear(cashField); await user.type(cashField, "4500");
       const variance = screen.getByLabelText("Variance explanation");
@@ -298,7 +292,6 @@ describe("DailyForecourtSheet", () => {
       render(<DailyForecourtSheet {...props} />);
 
       expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
-      expect(screen.getAllByRole("checkbox", { name: /returned/i })[0]).not.toBeChecked();
       expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(4500);
       expect(screen.getByLabelText("Variance explanation")).toHaveValue("Till was short by mistake");
     });
@@ -332,15 +325,6 @@ describe("DailyForecourtSheet", () => {
       await waitFor(() => expect(localStorage.getItem("forecourt-draft:closing:shift-1")).toBeNull());
     });
 
-    it("keeps test fuel marked as returned by default even when an older saved draft has no returned choices recorded", () => {
-      localStorage.setItem("forecourt-draft:closing:shift-1", JSON.stringify({ testFuel: { a_n1: "5" }, testFuelReturned: {} }));
-      const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
-      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={activeShift} />);
-
-      for (const checkbox of screen.getAllByRole("checkbox", { name: /returned/i })) {
-        expect(checkbox).toBeChecked();
-      }
-    });
   });
 
   describe("individual pump shift completion", () => {
@@ -358,6 +342,8 @@ describe("DailyForecourtSheet", () => {
 
       const closingOne = screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" });
       await user.clear(closingOne); await user.type(closingOne, "150");
+      const testFuelField = screen.getByRole("spinbutton", { name: "A-N1 test fuel" });
+      await user.clear(testFuelField); await user.type(testFuelField, "5");
       await user.type(screen.getByLabelText("Pump A shift start time"), "0600");
       await user.type(screen.getByLabelText("Pump A shift end time"), "1400");
       const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
@@ -375,6 +361,7 @@ describe("DailyForecourtSheet", () => {
       expect(body.closingNozzleReadings).toMatchObject({ a_n1: "150" });
       expect(body.closingNozzleReadings).not.toHaveProperty("b_n1");
       expect(body.collections).toMatchObject({ cash: "1000" });
+      expect(body.nonSaleDispenses).toContainEqual({ nozzleId: "a_n1", volume: "5", returnedToTank: true });
 
       expect(await screen.findByText(/^completed \d/i)).toBeInTheDocument();
       expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
@@ -385,7 +372,7 @@ describe("DailyForecourtSheet", () => {
       expect(screen.getByRole("combobox", { name: "Pump A active operator" })).toHaveValue("");
     });
 
-    it("carries a completed segment's closing reading forward as the next segment's opening, and folds its totals into the pump's live totals", () => {
+    it("carries a completed segment's closing reading forward as the next segment's opening, without folding its historical totals into the live ledger", () => {
       const historyEntry = {
         id: "seg-1", pumpId: "pump-a", pumpLabel: "Pump A", staffId: "arun", staffName: "Arun", businessDate: "2026-09-01",
         shiftStartTime: "06:00", shiftEndTime: "14:00",
@@ -417,7 +404,7 @@ describe("DailyForecourtSheet", () => {
       expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(0);
 
       const petrolTotal = screen.getByLabelText("Pump A petrol total");
-      expect(within(petrolTotal).getByText("1000.000 L")).toBeInTheDocument();
+      expect(within(petrolTotal).getByText("0.000 L")).toBeInTheDocument();
     });
 
     it("compares Collections entered against only the live segment's expected sales, not the cumulative historical+live total", async () => {

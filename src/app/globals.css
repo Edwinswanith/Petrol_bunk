@@ -354,8 +354,6 @@ textarea:focus-visible {
 .pump-correction-dialog::backdrop { background: rgba(19, 32, 29, 0.45); backdrop-filter: blur(2px); }
 .dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .dialog-header .button { min-height: 34px; padding: 0 10px; }
-.pump-correction-dialog .returned-check { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--ink-soft); }
-.pump-correction-dialog .returned-check input { width: auto; min-height: auto; }
 @media (max-width: 640px) { .pump-correction-dialog { padding: 18px; } }
 
 .reveal { animation: reveal .55s cubic-bezier(.2,.72,.24,1) both; }

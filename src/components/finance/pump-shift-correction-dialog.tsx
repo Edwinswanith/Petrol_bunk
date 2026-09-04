@@ -34,9 +34,6 @@ export function PumpShiftCorrectionDialog({
   const [testFuel, setTestFuel] = useState<Record<string, string>>(
     Object.fromEntries(stationIds.map((id) => [id, entry.nonSaleDispenses.find((dispense) => dispense.nozzleId === id)?.volume ?? "0"]))
   );
-  const [testFuelReturned, setTestFuelReturned] = useState<Record<string, boolean>>(
-    Object.fromEntries(stationIds.map((id) => [id, entry.nonSaleDispenses.find((dispense) => dispense.nozzleId === id)?.returnedToTank ?? false]))
-  );
   const [collections, setCollections] = useState(entry.collections);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
@@ -56,7 +53,7 @@ export function PumpShiftCorrectionDialog({
     setError("");
     try {
       const nonSaleDispenses = stationIds
-        .map((nozzleId) => ({ nozzleId, volume: testFuel[nozzleId] ?? "0", returnedToTank: testFuelReturned[nozzleId] === true }))
+        .map((nozzleId) => ({ nozzleId, volume: testFuel[nozzleId] ?? "0", returnedToTank: true }))
         .filter((dispense) => Number(dispense.volume) > 0);
       const response = await fetch(`/api/shifts/${entry.shiftId}/pumps/${entry.pumpId}/history/${entry.id}`, {
         method: "PATCH",
@@ -127,9 +124,6 @@ export function PumpShiftCorrectionDialog({
                   <input aria-label={`${stationLabels[stationId] ?? stationId} test fuel`} min="0" onChange={(event) => setTestFuel({ ...testFuel, [stationId]: event.target.value })} step="0.001" type="number" value={testFuel[stationId] ?? "0"} />
                   <span className="unit">test L</span>
                 </span>
-                {Number(testFuel[stationId] ?? 0) > 0 ? (
-                  <span className="returned-check"><input checked={testFuelReturned[stationId] === true} onChange={(event) => setTestFuelReturned({ ...testFuelReturned, [stationId]: event.target.checked })} type="checkbox" />Returned to tank</span>
-                ) : null}
               </label>
             ))}
           </div>
