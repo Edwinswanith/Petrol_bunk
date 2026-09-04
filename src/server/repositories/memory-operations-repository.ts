@@ -2,7 +2,7 @@ import type {
   ActiveShiftCorrectionInput,
   CloseShiftInput,
   OpenShiftInput,
-  PumpProgressInput,
+  PumpShiftCompletionInput,
   ShiftRecord
 } from "@/server/domain/operations";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
@@ -10,6 +10,7 @@ import Decimal from "decimal.js";
 import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
+import { applyPumpShiftCompletion } from "@/server/services/pump-shift-completion-service";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -223,12 +224,10 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       return clone(updated);
     },
 
-    async saveShiftPumpProgress(id: string, pumpId: string, input: PumpProgressInput): Promise<ShiftRecord> {
+    async completePumpShift(id: string, pumpId: string, input: PumpShiftCompletionInput): Promise<ShiftRecord> {
       const shift = shifts.get(id);
       if (!shift) throw new Error("Shift not found");
-      if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
-      const entry = { pumpId, ...input, savedAt: new Date().toISOString() };
-      const updated = { ...shift, pumpProgress: { ...(shift.pumpProgress ?? {}), [pumpId]: entry }, version: shift.version + 1 };
+      const updated = applyPumpShiftCompletion(shift, pumpId, input);
       shifts.set(id, updated);
       return clone(updated);
     },

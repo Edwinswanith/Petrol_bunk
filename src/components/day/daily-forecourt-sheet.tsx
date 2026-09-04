@@ -5,7 +5,7 @@ import Link from "next/link";
 import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { ShiftReconciliation } from "@/server/domain/operations";
+import type { PumpShiftRecord, ShiftReconciliation } from "@/server/domain/operations";
 import { pumpGroupId } from "@/server/domain/pump-grouping";
 
 function readDraft<T>(key: string): Partial<T> | undefined {
@@ -33,14 +33,6 @@ type ClosingDraft = {
   closingTankStocks: Record<string, string>; rates: Rates; activeCorrectionReason: string; varianceExplanation: string;
   pumpShiftTimes: PumpShiftTimes;
 };
-type PumpProgressEntry = {
-  pumpId: string; shiftStartTime?: string; shiftEndTime?: string;
-  closingNozzleReadings: Record<string, string>;
-  nonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
-  collections?: { cash: string; upi: string; card: string; credit: string; other: string; declaredCashHandover: string };
-  savedAt: string;
-};
-
 type Product = { id: string; code: string; name: string; sellingPricePerLitre: string; costPricePerLitre: string; marketReferencePrice?: string };
 type Staff = { id: string; name: string; monthlySalary: string; dailyBeta?: string; assignedShift?: "SHIFT_1" | "SHIFT_2" };
 type Station = {
@@ -54,7 +46,7 @@ type Assignment = { staffId: string; staffName: string; nozzleId: string };
 type ActiveShift = {
   id: string; name: string; businessDate: string; startedAt: string; openingNozzleReadings: Record<string, string>;
   openingTankStocks: Record<string, string>; staffAssignments: Assignment[];
-  pumpProgress?: Record<string, PumpProgressEntry>;
+  pumpShiftHistory?: PumpShiftRecord[];
 };
 
 type Props = {
@@ -115,6 +107,22 @@ function fuelGroups(stations: Station[], litres: (station: Station) => number, r
   return [...groups.values()];
 }
 
+function historicalStationTotals(history: PumpShiftRecord[], station: Station) {
+  let meteredVolume = 0, litres = 0, revenue = 0, profit = 0;
+  for (const entry of history) {
+    const nozzle = entry.nozzles[station.stationId];
+    if (!nozzle) continue;
+    meteredVolume += Number(nozzle.meteredVolume);
+    litres += Number(nozzle.customerSalesVolume);
+    revenue += Number(nozzle.revenue);
+    const product = entry.products.find((item) => item.productId === station.productId);
+    const productLitres = product ? Number(product.litresSold) : 0;
+    const share = productLitres > 0 ? Number(nozzle.customerSalesVolume) / productLitres : 0;
+    profit += product ? Number(product.grossProfit) * share : 0;
+  }
+  return { meteredVolume, litres, revenue, profit };
+}
+
 function staffOption(person: Staff) {
   return `${person.name} · ${person.assignedShift === "SHIFT_2" ? "Shift 2" : "Shift 1"}`;
 }
@@ -127,17 +135,19 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   const [preview, setPreview] = useState<ShiftReconciliation>();
   const [closedRecord, setClosedRecord] = useState<{ id: string; reconciliation: ShiftReconciliation }>();
   const initialOpenings = Object.fromEntries(stations.map((station) => [station.stationId, activeShift?.openingNozzleReadings[station.stationId] ?? previousReadings[station.stationId] ?? ""]));
-  const pumpProgressEntries = Object.values(activeShift?.pumpProgress ?? {});
-  const [openingReadings, setOpeningReadings] = useState<Record<string, string>>(initialOpenings);
-  const [closingReadings, setClosingReadings] = useState<Record<string, string>>({ ...initialOpenings, ...Object.assign({}, ...pumpProgressEntries.map((entry) => entry.closingNozzleReadings)) });
+  const [pumpShiftHistory, setPumpShiftHistory] = useState<PumpShiftRecord[]>(activeShift?.pumpShiftHistory ?? []);
+  const seededOpenings = Object.fromEntries(stations.map((station) => {
+    const entriesForStation = pumpShiftHistory.filter((entry) => entry.closingNozzleReadings[station.stationId] !== undefined);
+    const last = entriesForStation[entriesForStation.length - 1];
+    return [station.stationId, last ? last.closingNozzleReadings[station.stationId] : initialOpenings[station.stationId]];
+  }));
+  const [openingReadings, setOpeningReadings] = useState<Record<string, string>>(seededOpenings);
+  const [closingReadings, setClosingReadings] = useState<Record<string, string>>({ ...seededOpenings });
   const [operatorIds, setOperatorIds] = useState<Record<string, string>>(Object.fromEntries(pumps.map((pump) => [pump.id, pump.assignment?.staffId ?? ""])));
-  const [collections, setCollections] = useState<Record<string, Record<string, string>>>(Object.fromEntries(Object.entries(activeShift?.pumpProgress ?? {}).filter(([, entry]) => entry.collections).map(([pumpId, entry]) => [pumpId, entry.collections as NonNullable<PumpProgressEntry["collections"]>])));
-  const [testFuel, setTestFuel] = useState<Record<string, string>>(Object.fromEntries(pumpProgressEntries.flatMap((entry) => entry.nonSaleDispenses.map((dispense) => [dispense.nozzleId, dispense.volume]))));
-  const [testFuelReturned, setTestFuelReturned] = useState<Record<string, boolean>>({
-    ...Object.fromEntries(stations.map((station) => [station.stationId, true])),
-    ...Object.fromEntries(pumpProgressEntries.flatMap((entry) => entry.nonSaleDispenses.map((dispense) => [dispense.nozzleId, dispense.returnedToTank])))
-  });
-  const [pumpShiftTimes, setPumpShiftTimes] = useState<PumpShiftTimes>(Object.fromEntries(Object.entries(activeShift?.pumpProgress ?? {}).map(([pumpId, entry]) => [pumpId, { start: entry.shiftStartTime ?? "", end: entry.shiftEndTime ?? "" }])));
+  const [collections, setCollections] = useState<Record<string, Record<string, string>>>({});
+  const [testFuel, setTestFuel] = useState<Record<string, string>>({});
+  const [testFuelReturned, setTestFuelReturned] = useState<Record<string, boolean>>(Object.fromEntries(stations.map((station) => [station.stationId, true])));
+  const [pumpShiftTimes, setPumpShiftTimes] = useState<PumpShiftTimes>({});
   const [pumpSaving, setPumpSaving] = useState<Record<string, boolean>>({});
   const [pumpSavedAt, setPumpSavedAt] = useState<Record<string, Date>>({});
   const [rates, setRates] = useState<Rates>(Object.fromEntries(products.map((product) => { const snapshot = stations.find((station) => station.productId === product.id); return [product.id, { cost: activeShift ? snapshot?.costPerLitre ?? product.costPricePerLitre : product.costPricePerLitre, selling: activeShift ? snapshot?.pricePerLitre ?? product.sellingPricePerLitre : product.sellingPricePerLitre }]; })));
@@ -268,17 +278,22 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     finally { setSaving(false); }
   }
 
-  async function savePumpProgress(pump: Pump) {
+  async function completePumpShift(pump: Pump) {
     if (!activeShift) return;
+    const staffId = operatorIds[pump.id] ?? "";
+    const person = staff.find((item) => item.id === staffId);
+    if (!staffId || !person) { setError(`Select an employee for Pump ${pump.code} before completing the shift.`); return; }
     setPumpSaving((current) => ({ ...current, [pump.id]: true })); setError("");
     try {
       const pumpCollections = collections[pump.id];
+      const closingForPump = Object.fromEntries(pump.stations.map((station) => [station.stationId, number(closingReadings[station.stationId])]));
       const response = await fetch(`/api/shifts/${activeShift.id}/pumps/${pump.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          staffId, staffName: person.name,
           shiftStartTime: pumpShiftTimes[pump.id]?.start || undefined,
           shiftEndTime: pumpShiftTimes[pump.id]?.end || undefined,
-          closingNozzleReadings: Object.fromEntries(pump.stations.map((station) => [station.stationId, number(closingReadings[station.stationId])])),
+          closingNozzleReadings: closingForPump,
           nonSaleDispenses: pump.stations.map((station) => ({ nozzleId: station.stationId, volume: number(testFuel[station.stationId]), returnedToTank: testFuelReturned[station.stationId] === true })).filter((entry) => Number(entry.volume) > 0),
           collections: pumpCollections ? {
             cash: number(pumpCollections.cash), upi: number(pumpCollections.upi), card: number(pumpCollections.card),
@@ -286,9 +301,18 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
           } : undefined
         })
       });
-      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? `Could not save Pump ${pump.code}`);
+      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? `Could not complete Pump ${pump.code}'s shift`);
+      setPumpShiftHistory(body.pumpShiftHistory ?? []);
+      setOpeningReadings((current) => ({ ...current, ...closingForPump }));
+      setClosingReadings((current) => ({ ...current, ...closingForPump }));
+      setOperatorIds((current) => ({ ...current, [pump.id]: "" }));
+      setPumpShiftTimes((current) => ({ ...current, [pump.id]: { start: "", end: "" } }));
+      setCollections((current) => { const next = { ...current }; delete next[pump.id]; return next; });
+      setTestFuel((current) => { const next = { ...current }; for (const station of pump.stations) delete next[station.stationId]; return next; });
+      setTestFuelReturned((current) => ({ ...current, ...Object.fromEntries(pump.stations.map((station) => [station.stationId, true])) }));
       setPumpSavedAt((current) => ({ ...current, [pump.id]: new Date() }));
-    } catch (reason) { setError(reason instanceof Error ? reason.message : `Could not save Pump ${pump.code}`); }
+      router.refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : `Could not complete Pump ${pump.code}'s shift`); }
     finally { setPumpSaving((current) => ({ ...current, [pump.id]: false })); }
   }
 
@@ -312,12 +336,16 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     finally { setSaving(false); }
   }
 
-  const meteredLitres = (station: Station) => Math.max(0, Number(closingReadings[station.stationId] ?? 0) - Number(openingReadings[station.stationId] ?? 0));
+  const liveMeteredLitres = (station: Station) => Math.max(0, Number(closingReadings[station.stationId] ?? 0) - Number(openingReadings[station.stationId] ?? 0));
   const stationTestFuel = (station: Station) => Number(testFuel[station.stationId] ?? 0);
-  const litres = (station: Station) => Math.max(0, meteredLitres(station) - stationTestFuel(station));
-  const stationRevenue = (station: Station) => litres(station) * Number(rates[station.productId]?.selling ?? station.pricePerLitre);
-  const stationProfit = (station: Station) => litres(station) * (Number(rates[station.productId]?.selling ?? station.pricePerLitre) - Number(rates[station.productId]?.cost ?? station.costPerLitre));
+  const liveLitres = (station: Station) => Math.max(0, liveMeteredLitres(station) - stationTestFuel(station));
+  const liveRevenue = (station: Station) => liveLitres(station) * Number(rates[station.productId]?.selling ?? station.pricePerLitre);
+  const liveProfit = (station: Station) => liveLitres(station) * (Number(rates[station.productId]?.selling ?? station.pricePerLitre) - Number(rates[station.productId]?.cost ?? station.costPerLitre));
   const stationTestFuelValue = (station: Station) => stationTestFuel(station) * Number(rates[station.productId]?.selling ?? station.pricePerLitre);
+  const meteredLitres = (station: Station) => historicalStationTotals(pumpShiftHistory, station).meteredVolume + liveMeteredLitres(station);
+  const litres = (station: Station) => historicalStationTotals(pumpShiftHistory, station).litres + liveLitres(station);
+  const stationRevenue = (station: Station) => historicalStationTotals(pumpShiftHistory, station).revenue + liveRevenue(station);
+  const stationProfit = (station: Station) => historicalStationTotals(pumpShiftHistory, station).profit + liveProfit(station);
   const monthlyPayroll = staff.reduce((sum, person) => sum + Number(person.monthlySalary || 0), 0);
 
   async function addOperator(event: FormEvent<HTMLFormElement>) {
@@ -344,7 +372,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
       <div className="daily-sticky-action"><span><strong>{stations.length} nozzles · {pumps.length} staff positions</strong><small>Opening values and prices are snapshotted for today.</small></span>{draftSavedAt ? <span className="draft-saved-indicator"><Save size={14} />Draft saved {draftSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}<button className="button primary" disabled={saving || !staff.length} type="submit"><Play size={16} />{saving ? "Starting…" : "Start business day"}</button></div>
     </form></> : !closedRecord ? <form id="daily-closing-form" onSubmit={review}>
       <section className="active-day-console"><div className="active-day-heading"><span><small>Open day control centre</small><strong>Rates, openings and employees remain correctable until close</strong></span><span className="payroll-commitment"><small>Salary commitment</small><strong>{inr(String(monthlyPayroll))}</strong><em>monthly payroll</em></span></div><div className="active-rate-grid">{products.map((product) => <article key={product.id}><span className={`fuel-chip ${product.id}`}>{product.name}</span><label><span>Reseller purchase</span><span className="input-wrap"><input aria-label={`${product.name} active reseller purchase price`} min="0" onChange={(event) => setRates({ ...rates, [product.id]: { ...rates[product.id], cost: event.target.value } })} step="0.01" type="number" value={rates[product.id]?.cost ?? ""} /><span className="unit">₹</span></span></label><label><span>Customer selling</span><span className="input-wrap"><input aria-label={`${product.name} active customer selling price`} min="0" onChange={(event) => setRates({ ...rates, [product.id]: { ...rates[product.id], selling: event.target.value } })} step="0.01" type="number" value={rates[product.id]?.selling ?? ""} /><span className="unit">₹</span></span></label><span className="rate-margin"><small>Margin / L</small><strong>{inr(String(Number(rates[product.id]?.selling || 0) - Number(rates[product.id]?.cost || 0)))}</strong></span></article>)}</div></section>
-      <PumpClosingDeck pumps={pumps} staff={staff} openingReadings={openingReadings} setOpeningReadings={setOpeningReadings} operatorIds={operatorIds} setOperatorIds={setOperatorIds} closingReadings={closingReadings} setClosingReadings={setClosingReadings} litres={litres} meteredLitres={meteredLitres} revenue={stationRevenue} profit={stationProfit} testFuel={testFuel} setTestFuel={setTestFuel} testFuelValue={stationTestFuelValue} testFuelReturned={testFuelReturned} setTestFuelReturned={setTestFuelReturned} collections={collections} setCollections={setCollections} pumpShiftTimes={pumpShiftTimes} setPumpShiftTimes={setPumpShiftTimes} savePumpProgress={savePumpProgress} pumpSaving={pumpSaving} pumpSavedAt={pumpSavedAt} />
+      <PumpClosingDeck pumps={pumps} staff={staff} openingReadings={openingReadings} setOpeningReadings={setOpeningReadings} operatorIds={operatorIds} setOperatorIds={setOperatorIds} closingReadings={closingReadings} setClosingReadings={setClosingReadings} litres={litres} meteredLitres={meteredLitres} revenue={stationRevenue} profit={stationProfit} liveRevenue={liveRevenue} testFuel={testFuel} setTestFuel={setTestFuel} testFuelValue={stationTestFuelValue} testFuelReturned={testFuelReturned} setTestFuelReturned={setTestFuelReturned} collections={collections} setCollections={setCollections} pumpShiftTimes={pumpShiftTimes} setPumpShiftTimes={setPumpShiftTimes} completePumpShift={completePumpShift} pumpSaving={pumpSaving} pumpSavedAt={pumpSavedAt} />
       <TankDeck mode="closing" tanks={tanks} openingStocks={activeShift.openingTankStocks} values={closingTankStocks} onChange={setClosingTankStocks} />
       <label className="field active-correction-reason"><span>Reason for an opening, employee or rate correction</span><input name="activeCorrectionReason" onChange={(event) => setActiveCorrectionReason(event.target.value)} placeholder="Optional unless correcting the morning sheet" value={activeCorrectionReason} /></label>
       <label className="field variance-note"><span>Variance explanation</span><textarea name="varianceExplanation" onChange={(event) => setVarianceExplanation(event.target.value)} placeholder="Explain any payment, cash or physical tank difference before closing." value={varianceExplanation} /></label>
@@ -358,8 +386,8 @@ function PumpDeck({ pumps, staff, operatorIds, setOperatorIds, openingReadings, 
   return <><div className="section-step"><span>2</span><div><small>Staff &amp; meter setup</small><strong>Confirm each pump&apos;s employee and opening totalizers</strong></div></div><p className="nozzle-map-note">Permanent fuel map: every pump runs two petrol and two diesel nozzles, worked by one employee.</p><section className="pump-deck opening-grid">{pumps.map((pump) => <article className="pump-card" key={pump.id}><header><span className="pump-emblem"><Fuel size={20} /></span><span><small>Opening setup</small><strong>Pump {pump.code}</strong></span><Gauge size={22} /></header><div className="pump-operator"><label><span>Employee on this pump</span><select aria-label={`Pump ${pump.code} operator`} name={`staff-${pump.id}`} onChange={(event) => setOperatorIds({ ...operatorIds, [pump.id]: event.target.value })} required value={operatorIds[pump.id] ?? ""}><option value="">Select employee</option>{staff.map((person) => <option key={person.id} value={person.id}>{staffOption(person)}</option>)}</select></label></div><div className="nozzle-list">{pump.stations.map((station) => <div className="nozzle-entry opening-row" key={station.stationId}><span className={`nozzle-badge ${station.productId}`}><Fuel size={14} />{nozzleLabel(station)}</span><label className="totalizer-field"><span><PencilLine size={13} />Opening totalizer</span><span className="totalizer-control"><input aria-label={`${station.code} opening totalizer`} value={openingReadings[station.stationId] ?? ""} onChange={(event) => setOpeningReadings({ ...openingReadings, [station.stationId]: event.target.value })} min="0" name={`opening-${station.stationId}`} placeholder="Enter reading" required step="0.001" type="number" /><em>L</em></span><small>{previousReadingSources[station.stationId] ? `From ${previousReadingSources[station.stationId].businessDate} closing` : "First opening — enter manually"}</small></label></div>)}</div></article>)}</section></>;
 }
 
-function PumpClosingDeck({ pumps, staff, openingReadings, setOpeningReadings, operatorIds, setOperatorIds, closingReadings, setClosingReadings, litres, meteredLitres, revenue, profit, testFuel, setTestFuel, testFuelValue, testFuelReturned, setTestFuelReturned, collections, setCollections, pumpShiftTimes, setPumpShiftTimes, savePumpProgress, pumpSaving, pumpSavedAt }: { pumps: Pump[]; staff: Staff[]; openingReadings: Record<string, string>; setOpeningReadings: (value: Record<string, string>) => void; operatorIds: Record<string, string>; setOperatorIds: (value: Record<string, string>) => void; closingReadings: Record<string, string>; setClosingReadings: (value: Record<string, string>) => void; litres: (station: Station) => number; meteredLitres: (station: Station) => number; revenue: (station: Station) => number; profit: (station: Station) => number; testFuel: Record<string, string>; setTestFuel: (value: Record<string, string>) => void; testFuelValue: (station: Station) => number; testFuelReturned: Record<string, boolean>; setTestFuelReturned: (value: Record<string, boolean>) => void; collections: Record<string, Record<string, string>>; setCollections: (value: Record<string, Record<string, string>>) => void; pumpShiftTimes: PumpShiftTimes; setPumpShiftTimes: (value: PumpShiftTimes) => void; savePumpProgress: (pump: Pump) => void; pumpSaving: Record<string, boolean>; pumpSavedAt: Record<string, Date> }) {
-  return <section className="pump-deck compact-pump-deck">{pumps.map((pump) => { const expected = pump.stations.reduce((sum, station) => sum + revenue(station), 0); const entered = Object.entries(collections[pump.id] ?? {}).filter(([key]) => key !== "handover").reduce((sum, [, value]) => sum + Number(value || 0), 0); const groups = fuelGroups(pump.stations, litres, revenue, profit); const pumpTotal = groups.reduce((sum, group) => ({ litres: sum.litres + group.litres, revenue: sum.revenue + group.revenue, profit: sum.profit + group.profit }), { litres: 0, revenue: 0, profit: 0 }); const testGroups = fuelGroups(pump.stations, (station) => Number(testFuel[station.stationId] ?? 0), testFuelValue, () => 0).filter((group) => group.litres > 0); return <article className="pump-card closing compact-pump" key={pump.id}><header><span className="pump-emblem"><Fuel size={20} /></span><span><small>Live nozzle ledger</small><strong>Pump {pump.code}</strong></span><span className="pump-total"><b>{pump.stations.reduce((sum, station) => sum + meteredLitres(station), 0).toFixed(3)} L</b><small>metered today</small></span></header><div className="pump-sides"><section className="pump-side"><div className="side-owner"><label className="pump-operator-field"><span>Employee on this pump</span><select aria-label={`Pump ${pump.code} active operator`} onChange={(event) => setOperatorIds({ ...operatorIds, [pump.id]: event.target.value })} required value={operatorIds[pump.id] ?? ""}><option value="">Select</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><span className="side-live"><strong>{pump.stations.reduce((sum, station) => sum + litres(station), 0).toFixed(3)} L</strong><small>{inr(String(expected))} expected</small></span></div><div className="nozzle-list compact-nozzle-list">{pump.stations.map((station) => { const opening = openingReadings[station.stationId] ?? ""; return <div className="nozzle-ledger-row" key={station.stationId}><div className="ledger-nozzle"><span className={`nozzle-badge ${station.productId}`}><Fuel size={14} />{nozzleLabel(station)}</span></div><label><span>Opening</span><span className="input-wrap"><input aria-label={`${station.code} editable opening totalizer`} min="0" onChange={(event) => { const next = event.target.value; const wasUnchanged = closingReadings[station.stationId] === opening; setOpeningReadings({ ...openingReadings, [station.stationId]: next }); if (wasUnchanged) setClosingReadings({ ...closingReadings, [station.stationId]: next }); }} required step="0.001" type="number" value={opening} /><span className="unit">L</span></span></label><label><span>Closing</span><span className="input-wrap"><input aria-label={`${station.code} closing totalizer`} min={opening || "0"} name={`closing-${station.stationId}`} onChange={(event) => setClosingReadings({ ...closingReadings, [station.stationId]: event.target.value })} required step="0.001" type="number" value={closingReadings[station.stationId] ?? ""} /><span className="unit">L</span></span></label><label className="test-fuel-field"><span>Test fuel</span><span className="input-wrap"><input aria-label={`${station.code} test fuel`} min="0" name={`test-${station.stationId}`} onChange={(event) => setTestFuel({ ...testFuel, [station.stationId]: event.target.value })} step="0.001" type="number" value={testFuel[station.stationId] ?? "0"} /><span className="unit">L</span></span>{Number(testFuel[station.stationId] ?? 0) > 0 ? <span className="returned-check"><input aria-label={`${station.code} returned to tank`} checked={testFuelReturned[station.stationId] === true} name={`returned-${station.stationId}`} onChange={(event) => setTestFuelReturned({ ...testFuelReturned, [station.stationId]: event.target.checked })} type="checkbox" />Returned</span> : null}</label><div className="ledger-result"><strong>{litres(station).toFixed(3)} L</strong><span>{inr(String(revenue(station)))}</span><small>{inr(String(profit(station)))} profit</small></div></div>; })}</div><div className="fuel-summary">{groups.map((group) => <div aria-label={`Pump ${pump.code} ${group.productId} total`} className={`fuel-summary-item ${group.productId}`} key={group.productId}><span className={`nozzle-badge ${group.productId}`}><Fuel size={14} />{group.productName}</span><strong>{group.litres.toFixed(3)} L</strong><span>{inr(String(group.revenue))}</span><small>{inr(String(group.profit))} profit</small></div>)}<div aria-label={`Pump ${pump.code} total sales`} className="fuel-summary-total"><span><small>Overall sales</small><strong>{pumpTotal.litres.toFixed(3)} L</strong></span><span><small>Revenue</small><strong>{inr(String(pumpTotal.revenue))}</strong></span><span><small>Profit</small><strong>{inr(String(pumpTotal.profit))}</strong></span></div></div><PumpCollections pump={pump} expected={expected} entered={entered} testGroups={testGroups} values={collections[pump.id] ?? {}} onChange={(values) => setCollections({ ...collections, [pump.id]: values })} /><div className="pump-save-row"><label><span>Shift start</span><input aria-label={`Pump ${pump.code} shift start time`} onChange={(event) => setPumpShiftTimes({ ...pumpShiftTimes, [pump.id]: { start: event.target.value, end: pumpShiftTimes[pump.id]?.end ?? "" } })} type="time" value={pumpShiftTimes[pump.id]?.start ?? ""} /></label><label><span>Shift end</span><input aria-label={`Pump ${pump.code} shift end time`} onChange={(event) => setPumpShiftTimes({ ...pumpShiftTimes, [pump.id]: { start: pumpShiftTimes[pump.id]?.start ?? "", end: event.target.value } })} type="time" value={pumpShiftTimes[pump.id]?.end ?? ""} /></label><button className="button soft" disabled={pumpSaving[pump.id]} onClick={() => savePumpProgress(pump)} type="button"><Save size={14} />{pumpSaving[pump.id] ? "Saving…" : `Save Pump ${pump.code}`}</button>{pumpSavedAt[pump.id] ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Saved {pumpSavedAt[pump.id].toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</span> : null}</div></section></div></article>; })}</section>;
+function PumpClosingDeck({ pumps, staff, openingReadings, setOpeningReadings, operatorIds, setOperatorIds, closingReadings, setClosingReadings, litres, meteredLitres, revenue, profit, liveRevenue, testFuel, setTestFuel, testFuelValue, testFuelReturned, setTestFuelReturned, collections, setCollections, pumpShiftTimes, setPumpShiftTimes, completePumpShift, pumpSaving, pumpSavedAt }: { pumps: Pump[]; staff: Staff[]; openingReadings: Record<string, string>; setOpeningReadings: (value: Record<string, string>) => void; operatorIds: Record<string, string>; setOperatorIds: (value: Record<string, string>) => void; closingReadings: Record<string, string>; setClosingReadings: (value: Record<string, string>) => void; litres: (station: Station) => number; meteredLitres: (station: Station) => number; revenue: (station: Station) => number; profit: (station: Station) => number; liveRevenue: (station: Station) => number; testFuel: Record<string, string>; setTestFuel: (value: Record<string, string>) => void; testFuelValue: (station: Station) => number; testFuelReturned: Record<string, boolean>; setTestFuelReturned: (value: Record<string, boolean>) => void; collections: Record<string, Record<string, string>>; setCollections: (value: Record<string, Record<string, string>>) => void; pumpShiftTimes: PumpShiftTimes; setPumpShiftTimes: (value: PumpShiftTimes) => void; completePumpShift: (pump: Pump) => void; pumpSaving: Record<string, boolean>; pumpSavedAt: Record<string, Date> }) {
+  return <section className="pump-deck compact-pump-deck">{pumps.map((pump) => { const expected = pump.stations.reduce((sum, station) => sum + liveRevenue(station), 0); const entered = Object.entries(collections[pump.id] ?? {}).filter(([key]) => key !== "handover").reduce((sum, [, value]) => sum + Number(value || 0), 0); const groups = fuelGroups(pump.stations, litres, revenue, profit); const pumpTotal = groups.reduce((sum, group) => ({ litres: sum.litres + group.litres, revenue: sum.revenue + group.revenue, profit: sum.profit + group.profit }), { litres: 0, revenue: 0, profit: 0 }); const testGroups = fuelGroups(pump.stations, (station) => Number(testFuel[station.stationId] ?? 0), testFuelValue, () => 0).filter((group) => group.litres > 0); return <article className="pump-card closing compact-pump" key={pump.id}><header><span className="pump-emblem"><Fuel size={20} /></span><span><small>Live nozzle ledger</small><strong>Pump {pump.code}</strong></span><span className="pump-total"><b>{pump.stations.reduce((sum, station) => sum + meteredLitres(station), 0).toFixed(3)} L</b><small>metered today</small></span></header><div className="pump-sides"><section className="pump-side"><div className="side-owner"><label className="pump-operator-field"><span>Employee on this pump</span><select aria-label={`Pump ${pump.code} active operator`} onChange={(event) => setOperatorIds({ ...operatorIds, [pump.id]: event.target.value })} required value={operatorIds[pump.id] ?? ""}><option value="">Select</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><span className="side-live"><strong>{pump.stations.reduce((sum, station) => sum + litres(station), 0).toFixed(3)} L</strong><small>{inr(String(expected))} expected</small></span></div><div className="nozzle-list compact-nozzle-list">{pump.stations.map((station) => { const opening = openingReadings[station.stationId] ?? ""; return <div className="nozzle-ledger-row" key={station.stationId}><div className="ledger-nozzle"><span className={`nozzle-badge ${station.productId}`}><Fuel size={14} />{nozzleLabel(station)}</span></div><label><span>Opening</span><span className="input-wrap"><input aria-label={`${station.code} editable opening totalizer`} min="0" onChange={(event) => { const next = event.target.value; const wasUnchanged = closingReadings[station.stationId] === opening; setOpeningReadings({ ...openingReadings, [station.stationId]: next }); if (wasUnchanged) setClosingReadings({ ...closingReadings, [station.stationId]: next }); }} required step="0.001" type="number" value={opening} /><span className="unit">L</span></span></label><label><span>Closing</span><span className="input-wrap"><input aria-label={`${station.code} closing totalizer`} min={opening || "0"} name={`closing-${station.stationId}`} onChange={(event) => setClosingReadings({ ...closingReadings, [station.stationId]: event.target.value })} required step="0.001" type="number" value={closingReadings[station.stationId] ?? ""} /><span className="unit">L</span></span></label><label className="test-fuel-field"><span>Test fuel</span><span className="input-wrap"><input aria-label={`${station.code} test fuel`} min="0" name={`test-${station.stationId}`} onChange={(event) => setTestFuel({ ...testFuel, [station.stationId]: event.target.value })} step="0.001" type="number" value={testFuel[station.stationId] ?? "0"} /><span className="unit">L</span></span>{Number(testFuel[station.stationId] ?? 0) > 0 ? <span className="returned-check"><input aria-label={`${station.code} returned to tank`} checked={testFuelReturned[station.stationId] === true} name={`returned-${station.stationId}`} onChange={(event) => setTestFuelReturned({ ...testFuelReturned, [station.stationId]: event.target.checked })} type="checkbox" />Returned</span> : null}</label><div className="ledger-result"><strong>{litres(station).toFixed(3)} L</strong><span>{inr(String(revenue(station)))}</span><small>{inr(String(profit(station)))} profit</small></div></div>; })}</div><div className="fuel-summary">{groups.map((group) => <div aria-label={`Pump ${pump.code} ${group.productId} total`} className={`fuel-summary-item ${group.productId}`} key={group.productId}><span className={`nozzle-badge ${group.productId}`}><Fuel size={14} />{group.productName}</span><strong>{group.litres.toFixed(3)} L</strong><span>{inr(String(group.revenue))}</span><small>{inr(String(group.profit))} profit</small></div>)}<div aria-label={`Pump ${pump.code} total sales`} className="fuel-summary-total"><span><small>Overall sales</small><strong>{pumpTotal.litres.toFixed(3)} L</strong></span><span><small>Revenue</small><strong>{inr(String(pumpTotal.revenue))}</strong></span><span><small>Profit</small><strong>{inr(String(pumpTotal.profit))}</strong></span></div></div><PumpCollections pump={pump} expected={expected} entered={entered} testGroups={testGroups} values={collections[pump.id] ?? {}} onChange={(values) => setCollections({ ...collections, [pump.id]: values })} /><div className="pump-save-row"><label><span>Shift start</span><input aria-label={`Pump ${pump.code} shift start time`} onChange={(event) => setPumpShiftTimes({ ...pumpShiftTimes, [pump.id]: { start: event.target.value, end: pumpShiftTimes[pump.id]?.end ?? "" } })} type="time" value={pumpShiftTimes[pump.id]?.start ?? ""} /></label><label><span>Shift end</span><input aria-label={`Pump ${pump.code} shift end time`} onChange={(event) => setPumpShiftTimes({ ...pumpShiftTimes, [pump.id]: { start: pumpShiftTimes[pump.id]?.start ?? "", end: event.target.value } })} type="time" value={pumpShiftTimes[pump.id]?.end ?? ""} /></label><button className="button soft" disabled={pumpSaving[pump.id]} onClick={() => completePumpShift(pump)} type="button"><CheckCircle2 size={14} />{pumpSaving[pump.id] ? "Completing…" : `Complete Pump ${pump.code} shift`}</button>{pumpSavedAt[pump.id] ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Completed {pumpSavedAt[pump.id].toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</span> : null}</div></section></div></article>; })}</section>;
 }
 
 function PumpCollections({ pump, expected, entered, testGroups, values, onChange }: { pump: Pump; expected: number; entered: number; testGroups: FuelGroup[]; values: Record<string, string>; onChange: (values: Record<string, string>) => void }) {

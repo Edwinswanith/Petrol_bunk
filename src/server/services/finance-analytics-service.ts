@@ -68,6 +68,12 @@ export function buildFinanceAnalytics(input: { month: string; from?: string; to?
     category, amount: money(Decimal.sum(0, ...expenses.filter((expense) => expense.category === category).map((expense) => expense.amount)))
   }));
 
+  const allShiftsInPeriod = input.shifts.filter((shift) => inPeriod(shift.businessDate));
+  const pumpShifts = allShiftsInPeriod
+    .flatMap((shift) => shift.pumpShiftHistory ?? [])
+    .filter((entry) => inPeriod(entry.businessDate))
+    .sort((a, b) => b.businessDate.localeCompare(a.businessDate) || b.completedAt.localeCompare(a.completedAt));
+
   return {
     month: input.month,
     summary: { revenue: money(revenue), grossMargin: money(grossMargin), nonSalaryExpenses: money(nonSalaryExpenses), salaryBudget: money(salaryBudget), settledPayrollNet: money(settledPayrollNet), settledPayrollPaid: money(settledPayrollPaid), recordedSalaryPayments: money(recordedSalaryPayments), estimatedNetProfit: money(grossMargin.minus(nonSalaryExpenses).minus(salaryCommitment)) },
@@ -77,6 +83,7 @@ export function buildFinanceAnalytics(input: { month: string; from?: string; to?
     prices: [...new Map(shifts.flatMap((shift) => (shift.stationSnapshots ?? []).map((station) => [`${shift.businessDate}:${station.productId}`, { businessDate: shift.businessDate, productId: station.productId, productName: station.productName, resellerPrice: station.costPerLitre, customerPrice: station.pricePerLitre, marginPerLitre: money(new Decimal(station.pricePerLitre).minus(station.costPerLitre)) }]))).values()].sort((a, b) => b.businessDate.localeCompare(a.businessDate) || a.productName.localeCompare(b.productName)),
     days,
     expenseCategories,
-    expenses
+    expenses,
+    pumpShifts
   };
 }

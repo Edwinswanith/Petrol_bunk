@@ -343,16 +343,16 @@ describe("DailyForecourtSheet", () => {
     });
   });
 
-  describe("individual pump save", () => {
+  describe("individual pump shift completion", () => {
     const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
     const products = [{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }];
     const staff = [{ id: "arun", name: "Arun", monthlySalary: "18000" }];
     const tanks = [{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }];
     const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
 
-    it("saves only that pump's shift time, readings and collections when its own Save button is clicked", async () => {
+    it("completes that pump's shift, sends its readings/collections, and resets its fields for the next employee", async () => {
       const user = userEvent.setup();
-      const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({ ok: true, json: async () => ({ id: "shift-1" }) }));
+      const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({ ok: true, json: async () => ({ id: "shift-1", pumpShiftHistory: [] }) }));
       vi.stubGlobal("fetch", fetchMock);
       render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={activeShift} />);
 
@@ -363,40 +363,97 @@ describe("DailyForecourtSheet", () => {
       const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
       await user.clear(cashField); await user.type(cashField, "1000");
 
-      await user.click(screen.getByRole("button", { name: /save pump a/i }));
+      await user.click(screen.getByRole("button", { name: /complete pump a shift/i }));
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/shift-1/pumps/pump-a", expect.objectContaining({ method: "PATCH" })));
       const [, request] = fetchMock.mock.calls.find(([url]) => url === "/api/shifts/shift-1/pumps/pump-a")!;
       const body = JSON.parse((request as RequestInit).body as string);
+      expect(body.staffId).toBe("arun");
+      expect(body.staffName).toBe("Arun");
       expect(body.shiftStartTime).toBe("06:00");
       expect(body.shiftEndTime).toBe("14:00");
       expect(body.closingNozzleReadings).toMatchObject({ a_n1: "150" });
       expect(body.closingNozzleReadings).not.toHaveProperty("b_n1");
       expect(body.collections).toMatchObject({ cash: "1000" });
 
-      expect(await screen.findByText(/^saved \d/i)).toBeInTheDocument();
+      expect(await screen.findByText(/^completed \d/i)).toBeInTheDocument();
+      expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
+      expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(150);
+      expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("");
+      expect(screen.getByLabelText("Pump A shift end time")).toHaveValue("");
+      expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(0);
+      expect(screen.getByRole("combobox", { name: "Pump A active operator" })).toHaveValue("");
     });
 
-    it("pre-fills a pump's closing data and shift times from progress already saved on the server", () => {
-      const shiftWithProgress = {
-        ...activeShift,
-        pumpProgress: {
-          "pump-a": {
-            pumpId: "pump-a", shiftStartTime: "06:00", shiftEndTime: "14:00",
-            closingNozzleReadings: { a_n1: "500", a_n2: "500", a_n3: "500", a_n4: "500" },
-            nonSaleDispenses: [],
-            collections: { cash: "2000", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "2000" },
-            savedAt: "2026-09-01T08:00:00.000Z"
-          }
-        }
+    it("carries a completed segment's closing reading forward as the next segment's opening, and folds its totals into the pump's live totals", () => {
+      const historyEntry = {
+        id: "seg-1", pumpId: "pump-a", pumpLabel: "Pump A", staffId: "arun", staffName: "Arun", businessDate: "2026-09-01",
+        shiftStartTime: "06:00", shiftEndTime: "14:00",
+        openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" },
+        closingNozzleReadings: { a_n1: "500", a_n2: "500", a_n3: "500", a_n4: "500" },
+        nonSaleDispenses: [],
+        collections: { cash: "2000", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "2000" },
+        litresSold: "2000.000", expectedSalesValue: "203000.00", accountedTender: "2000.00", tenderVariance: "-201000.00",
+        declaredCashHandover: "2000.00", cashVariance: "0.00",
+        products: [
+          { productId: "petrol", productName: "Petrol", litresSold: "1000.000", revenue: "102500.00", grossProfit: "5700.00" },
+          { productId: "diesel", productName: "Diesel", litresSold: "1000.000", revenue: "100500.00", grossProfit: "6100.00" }
+        ],
+        nozzles: {
+          a_n1: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "51250.00" },
+          a_n2: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "51250.00" },
+          a_n3: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "50250.00" },
+          a_n4: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "50250.00" }
+        },
+        completedAt: "2026-09-01T14:00:00.000Z"
       };
-      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={shiftWithProgress} />);
+      const shiftWithHistory = { ...activeShift, pumpShiftHistory: [historyEntry] };
+      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={shiftWithHistory} />);
 
       expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(500);
-      expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("06:00");
-      expect(screen.getByLabelText("Pump A shift end time")).toHaveValue("14:00");
-      expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(2000);
-      expect(screen.getByRole("spinbutton", { name: "Pump B cash collected" })).toHaveValue(0);
+      expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(500);
+      expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("");
+      expect(screen.getByLabelText("Pump A shift end time")).toHaveValue("");
+      expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(0);
+
+      const petrolTotal = screen.getByLabelText("Pump A petrol total");
+      expect(within(petrolTotal).getByText("1000.000 L")).toBeInTheDocument();
+    });
+
+    it("compares Collections entered against only the live segment's expected sales, not the cumulative historical+live total", async () => {
+      const user = userEvent.setup();
+      const historyEntry = {
+        id: "seg-1", pumpId: "pump-a", pumpLabel: "Pump A", staffId: "arun", staffName: "Arun", businessDate: "2026-09-01",
+        shiftStartTime: "06:00", shiftEndTime: "14:00",
+        openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" },
+        closingNozzleReadings: { a_n1: "500", a_n2: "500", a_n3: "500", a_n4: "500" },
+        nonSaleDispenses: [],
+        collections: { cash: "2000", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "2000" },
+        litresSold: "2000.000", expectedSalesValue: "203000.00", accountedTender: "2000.00", tenderVariance: "-201000.00",
+        declaredCashHandover: "2000.00", cashVariance: "0.00",
+        products: [
+          { productId: "petrol", productName: "Petrol", litresSold: "1000.000", revenue: "102500.00", grossProfit: "5700.00" },
+          { productId: "diesel", productName: "Diesel", litresSold: "1000.000", revenue: "100500.00", grossProfit: "6100.00" }
+        ],
+        nozzles: {
+          a_n1: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "51250.00" },
+          a_n2: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "51250.00" },
+          a_n3: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "50250.00" },
+          a_n4: { meteredVolume: "500.000", customerSalesVolume: "500.000", expectedTankOutflow: "500.000", revenue: "50250.00" }
+        },
+        completedAt: "2026-09-01T14:00:00.000Z"
+      };
+      const shiftWithHistory = { ...activeShift, pumpShiftHistory: [historyEntry] };
+      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={shiftWithHistory} />);
+
+      const closingOne = screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" });
+      await user.clear(closingOne); await user.type(closingOne, "600");
+      const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
+      await user.clear(cashField); await user.type(cashField, "10250");
+
+      const enteredCallout = screen.getByText("₹10,250.00 entered");
+      expect(enteredCallout).toBeInTheDocument();
+      expect(within(enteredCallout.closest("div")!).getByText("₹0.00 variance")).toBeInTheDocument();
     });
   });
 });

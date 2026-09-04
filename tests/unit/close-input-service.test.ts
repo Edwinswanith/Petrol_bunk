@@ -112,6 +112,57 @@ describe("prepareCloseInput", () => {
     expect(prepared.staffHandovers).toEqual({ "staff-edwin": "975" });
   });
 
+  it("sums a pump's completed shift history together with the currently live segment when closing the day", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const nozzle = (id: string) => ({
+      stationId: id, code: id.toUpperCase(), name: id, productId: "petrol", productName: "Petrol",
+      tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95",
+      dispenserId: "pump-a", dispenserCode: "1", sideId: "A-S1"
+    });
+    const pumpShift: ShiftRecord = {
+      ...shift,
+      staffAssignments: [
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n1" },
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n2" }
+      ],
+      stationSnapshots: [nozzle("a_n1"), nozzle("a_n2")],
+      pumpShiftHistory: [
+        {
+          id: "seg-1", pumpId: "pump-a", pumpLabel: "Pump 1", staffId: "staff-arun", staffName: "Arun", businessDate: "2026-08-31",
+          openingNozzleReadings: { a_n1: "1000", a_n2: "1000" }, closingNozzleReadings: { a_n1: "1100", a_n2: "1050" },
+          nonSaleDispenses: [{ nozzleId: "a_n1", volume: "2", returnedToTank: true }],
+          collections: { cash: "100", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "100" },
+          litresSold: "148.000", expectedSalesValue: "14800.00", accountedTender: "100.00", tenderVariance: "-14700.00",
+          declaredCashHandover: "100.00", cashVariance: "0.00", products: [], nozzles: {}, completedAt: "2026-08-31T12:00:00.000Z"
+        },
+        {
+          id: "seg-2", pumpId: "pump-a", pumpLabel: "Pump 1", staffId: "staff-priya", staffName: "Priya", businessDate: "2026-08-31",
+          openingNozzleReadings: { a_n1: "1100", a_n2: "1050" }, closingNozzleReadings: { a_n1: "1150", a_n2: "1080" },
+          nonSaleDispenses: [],
+          collections: { cash: "50", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "50" },
+          litresSold: "80.000", expectedSalesValue: "8000.00", accountedTender: "50.00", tenderVariance: "-7950.00",
+          declaredCashHandover: "50.00", cashVariance: "0.00", products: [], nozzles: {}, completedAt: "2026-08-31T18:00:00.000Z"
+        }
+      ]
+    };
+
+    const prepared = await prepareCloseInput(pumpShift, {
+      ...closeInput,
+      nonSaleDispenses: [{ nozzleId: "a_n2", volume: "1", returnedToTank: false }],
+      payments: { ...closeInput.payments, cashSales: "999999", upi: "999999", declaredCashHandover: "999999" },
+      staffHandovers: { "staff-edwin": "999999" },
+      sideCollections: { "pump-a": { cash: "30", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "30" } }
+    });
+
+    expect(prepared.payments).toEqual(expect.objectContaining({ cashSales: "180", declaredCashHandover: "180" }));
+    expect(prepared.staffHandovers).toEqual({ "staff-arun": "100", "staff-priya": "50", "staff-edwin": "30" });
+    expect(prepared.nonSaleDispenses).toEqual([
+      { nozzleId: "a_n1", volume: "2", returnedToTank: true },
+      { nozzleId: "a_n2", volume: "1", returnedToTank: false }
+    ]);
+  });
+
   it("does not allow a configured pump to be omitted from closing", async () => {
     vi.mocked(listExpenses).mockResolvedValue([]);
     vi.mocked(listFuelReceipts).mockResolvedValue([]);

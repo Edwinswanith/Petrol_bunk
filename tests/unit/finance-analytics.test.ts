@@ -37,6 +37,20 @@ const expense = (category: ExpenseRecord["category"], amount: string): ExpenseRe
   id: `${category}-${amount}`, category, amount, paymentMethod: "cash", date: "2026-05-01", note: `${category} expense`, createdAt: "2026-05-01T09:00:00.000Z", idempotencyKey: `${category}-${amount}`
 });
 
+function pumpShiftEntry(overrides: Partial<NonNullable<ShiftRecord["pumpShiftHistory"]>[number]> = {}): NonNullable<ShiftRecord["pumpShiftHistory"]>[number] {
+  return {
+    id: "seg-1", pumpId: "pump-a", pumpLabel: "Pump A", staffId: "edwin", staffName: "Edwin", businessDate: "2026-05-01",
+    openingNozzleReadings: { a_n1: "1000" }, closingNozzleReadings: { a_n1: "1100" }, nonSaleDispenses: [],
+    collections: { cash: "10000", upi: "0", card: "0", credit: "0", other: "0", declaredCashHandover: "10000" },
+    litresSold: "100.000", expectedSalesValue: "10000.00", accountedTender: "10000.00", tenderVariance: "0.00",
+    declaredCashHandover: "10000.00", cashVariance: "0.00",
+    products: [{ productId: "petrol", productName: "Petrol", litresSold: "100.000", revenue: "10000.00", grossProfit: "1000.00" }],
+    nozzles: { a_n1: { meteredVolume: "100.000", customerSalesVolume: "100.000", expectedTankOutflow: "100.000", revenue: "10000.00" } },
+    completedAt: "2026-05-01T14:00:00.000Z",
+    ...overrides
+  };
+}
+
 describe("buildFinanceAnalytics", () => {
   it("builds monthly product, employee, expense and salary profitability from closed records", () => {
     const result = buildFinanceAnalytics({ month: "2026-05", shifts: [shift], expenses: [expense("maintenance", "200"), expense("salary", "300")], staff });
@@ -69,6 +83,21 @@ describe("buildFinanceAnalytics", () => {
     expect(result.summary.revenue).toBe("14500.00");
     expect(result.staffDays).toEqual(expect.arrayContaining([expect.objectContaining({ businessDate: "2026-05-01", staffId: "edwin", litres: "100.000" })]));
     expect(result.prices).toEqual(expect.arrayContaining([expect.objectContaining({ businessDate: "2026-05-01", productName: "Petrol", resellerPrice: "90", customerPrice: "100", marginPerLitre: "10.00" })]));
+  });
+
+  it("includes an open shift's completed pump-shifts even though it has no reconciliation yet", () => {
+    const openShift: ShiftRecord = { ...shift, id: "open-today", state: "OPEN", reconciliation: undefined, businessDate: "2026-05-02", pumpShiftHistory: [pumpShiftEntry({ id: "seg-open", businessDate: "2026-05-02" })] };
+    const result = buildFinanceAnalytics({ month: "2026-05", shifts: [shift, openShift], expenses: [], staff });
+    expect(result.pumpShifts).toEqual([expect.objectContaining({ id: "seg-open", pumpId: "pump-a", staffName: "Edwin", litresSold: "100.000" })]);
+  });
+
+  it("excludes pump-shift history entries outside the requested period and sorts newest first", () => {
+    const withinRange = pumpShiftEntry({ id: "seg-within", businessDate: "2026-05-01", completedAt: "2026-05-01T08:00:00.000Z" });
+    const laterSameDay = pumpShiftEntry({ id: "seg-later", businessDate: "2026-05-01", completedAt: "2026-05-01T16:00:00.000Z" });
+    const outsideRange = pumpShiftEntry({ id: "seg-outside", businessDate: "2026-06-01" });
+    const shiftWithHistory: ShiftRecord = { ...shift, pumpShiftHistory: [withinRange, laterSameDay, outsideRange] };
+    const result = buildFinanceAnalytics({ month: "2026-05", shifts: [shiftWithHistory], expenses: [], staff });
+    expect(result.pumpShifts.map((entry) => entry.id)).toEqual(["seg-later", "seg-within"]);
   });
 
   it("uses approved payroll settlement instead of the budget in net profit", () => {

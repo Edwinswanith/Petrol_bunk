@@ -30,6 +30,12 @@ export async function prepareCloseInput(
     );
   }
 
+  const historicalByPump = new Map<string, NonNullable<ShiftRecord["pumpShiftHistory"]>>();
+  for (const entry of shift.pumpShiftHistory ?? []) {
+    historicalByPump.set(entry.pumpId, [...(historicalByPump.get(entry.pumpId) ?? []), entry]);
+  }
+  const historicalNonSaleDispenses = (shift.pumpShiftHistory ?? []).flatMap((entry) => entry.nonSaleDispenses);
+
   let canonicalPayments = structuredClone(input.payments);
   let canonicalStaffHandovers = structuredClone(input.staffHandovers);
   if (input.sideCollections) {
@@ -53,6 +59,16 @@ export async function prepareCloseInput(
     for (const [pumpId, stations] of stationsByPump) {
       const collection = input.sideCollections[pumpId];
       if (!collection) continue;
+      for (const entry of historicalByPump.get(pumpId) ?? []) {
+        totals.cash = totals.cash.plus(entry.collections.cash);
+        totals.upi = totals.upi.plus(entry.collections.upi);
+        totals.card = totals.card.plus(entry.collections.card);
+        totals.credit = totals.credit.plus(entry.collections.credit);
+        totals.other = totals.other.plus(entry.collections.other);
+        totals.declaredCashHandover = totals.declaredCashHandover.plus(entry.collections.declaredCashHandover);
+        const tender = Decimal.sum(entry.collections.cash, entry.collections.upi, entry.collections.card, entry.collections.credit, entry.collections.other);
+        staffTotals.set(entry.staffId, (staffTotals.get(entry.staffId) ?? new Decimal(0)).plus(tender));
+      }
       totals.cash = totals.cash.plus(collection.cash);
       totals.upi = totals.upi.plus(collection.upi);
       totals.card = totals.card.plus(collection.card);
@@ -83,6 +99,7 @@ export async function prepareCloseInput(
 
   return {
     ...structuredClone(input),
+    nonSaleDispenses: [...historicalNonSaleDispenses, ...input.nonSaleDispenses],
     receipts: Object.fromEntries(
       Object.entries(shift.openingTankStocks).map(([tankId]) => [
         tankId,

@@ -1,4 +1,4 @@
-import type { ActiveShiftCorrectionInput, CloseShiftInput, OpenShiftInput, PumpProgressInput, ShiftRecord } from "@/server/domain/operations";
+import type { ActiveShiftCorrectionInput, CloseShiftInput, OpenShiftInput, PumpShiftCompletionInput, ShiftRecord } from "@/server/domain/operations";
 import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domain/forecourt";
 
 export interface OperationsRepository {
@@ -8,7 +8,7 @@ export interface OperationsRepository {
   closeShift(id: string, input: CloseShiftInput, idempotencyKey: string): Promise<ShiftRecord>;
   updateOpeningReading(id: string, nozzleId: string, reading: string): Promise<ShiftRecord>;
   updateActiveShift(id: string, input: ActiveShiftCorrectionInput): Promise<ShiftRecord>;
-  saveShiftPumpProgress(id: string, pumpId: string, input: PumpProgressInput): Promise<ShiftRecord>;
+  completePumpShift(id: string, pumpId: string, input: PumpShiftCompletionInput): Promise<ShiftRecord>;
   getTankBalances(): Promise<Record<string, string>>;
   adjustTankStock(input: TankStockAdjustmentInput): Promise<InventoryMovement>;
   listInventoryMovements(tankId?: string): Promise<InventoryMovement[]>;

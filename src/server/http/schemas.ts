@@ -61,7 +61,9 @@ export const activeShiftCorrectionSchema = z.object({
   reason: z.string().trim().max(300).optional()
 });
 
-export const shiftPumpProgressSchema = z.object({
+export const pumpShiftCompletionSchema = z.object({
+  staffId: z.string().min(1),
+  staffName: z.string().min(1),
   shiftStartTime: z.string().trim().max(20).optional(),
   shiftEndTime: z.string().trim().max(20).optional(),
   closingNozzleReadings: z.record(z.string(), decimal),

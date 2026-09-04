@@ -69,26 +69,38 @@ export type ActiveShiftCorrectionInput = {
   reason?: string;
 };
 
-export type PumpProgressCollections = {
-  cash: string;
-  upi: string;
-  card: string;
-  credit: string;
-  other: string;
-  declaredCashHandover: string;
-};
-
-export type PumpProgressInput = {
+export type PumpShiftCompletionInput = {
+  staffId: string;
+  staffName: string;
   shiftStartTime?: string;
   shiftEndTime?: string;
   closingNozzleReadings: Record<string, string>;
   nonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
-  collections?: PumpProgressCollections;
+  collections?: SideCollection;
 };
 
-export type PumpProgressEntry = PumpProgressInput & {
+export type PumpShiftRecord = {
+  id: string;
   pumpId: string;
-  savedAt: string;
+  pumpLabel: string;
+  staffId: string;
+  staffName: string;
+  businessDate: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  openingNozzleReadings: Record<string, string>;
+  closingNozzleReadings: Record<string, string>;
+  nonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
+  collections: SideCollection;
+  litresSold: string;
+  expectedSalesValue: string;
+  accountedTender: string;
+  tenderVariance: string;
+  declaredCashHandover: string;
+  cashVariance: string;
+  products: Array<{ productId: string; productName: string; litresSold: string; revenue: string; grossProfit: string }>;
+  nozzles: Record<string, { meteredVolume: string; customerSalesVolume: string; expectedTankOutflow: string; revenue: string }>;
+  completedAt: string;
 };
 
 export type ShiftCorrection = {
@@ -188,5 +200,5 @@ export type ShiftRecord = OpenShiftInput & {
   reconciliation?: ShiftReconciliation;
   varianceExplanation?: string;
   corrections?: ShiftCorrection[];
-  pumpProgress?: Record<string, PumpProgressEntry>;
+  pumpShiftHistory?: PumpShiftRecord[];
 };

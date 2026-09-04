@@ -33,7 +33,7 @@ export function apiError(error: unknown) {
   ) {
     return NextResponse.json({ error: message, code: "STATE_CONFLICT", requestId }, { status: 409 });
   }
-  if (message.startsWith("Unknown nozzle:") || message.startsWith("Missing closing")) {
+  if (message.startsWith("Unknown nozzle:") || message.startsWith("Unknown pump:") || message.startsWith("Missing closing")) {
     return NextResponse.json({ error: message, code: "COMMAND_FAILED", requestId }, { status: 400 });
   }
   if (message.includes("already exists") || message.startsWith("Unknown station:") || message.startsWith("Missing opening") || message.startsWith("Unknown assigned station:") || message.includes("product") || message.includes("tank")) {

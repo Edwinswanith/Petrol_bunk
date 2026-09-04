@@ -8,6 +8,7 @@ import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-
 import type { OperationsRepository } from "@/server/repositories/operations-repository";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
 import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
+import { applyPumpShiftCompletion } from "@/server/services/pump-shift-completion-service";
 
 type StoredShift = ShiftRecord & { _id: string };
 type IdempotencyRecord = { _id: string; shiftId: string; createdAt: Date };
@@ -229,20 +230,18 @@ export function createMongoOperationsRepository(): OperationsRepository {
       if (!result) throw new Error("Active-day correction did not complete"); return result;
     },
 
-    async saveShiftPumpProgress(id, pumpId, input) {
+    async completePumpShift(id, pumpId, input) {
       await ensureIndexes();
       const client = await getMongoClient(); const database = await getMongoDatabase(); const session = client.startSession(); let result: ShiftRecord | undefined;
       try { await session.withTransaction(async () => {
         const current = await database.collection<StoredShift>("shifts").findOne({ _id: id }, { session });
         if (!current) throw new Error("Shift not found");
-        if (current.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
-        const entry = { pumpId, ...input, savedAt: new Date().toISOString() };
-        const updated: ShiftRecord = { ...withoutId(current), pumpProgress: { ...(current.pumpProgress ?? {}), [pumpId]: entry }, version: current.version + 1 };
+        const updated = applyPumpShiftCompletion(withoutId(current), pumpId, input);
         const update = await database.collection<StoredShift>("shifts").replaceOne({ _id: id, version: current.version, state: "OPEN" }, { ...updated }, { session });
         if (update.modifiedCount !== 1) throw new Error("Shift changed on another device. Refresh and retry.");
         result = updated;
       }); } finally { await session.endSession(); }
-      if (!result) throw new Error("Pump progress could not be saved");
+      if (!result) throw new Error("Pump shift could not be saved");
       return result;
     },
 
