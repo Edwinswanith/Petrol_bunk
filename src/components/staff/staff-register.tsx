@@ -1,12 +1,71 @@
 "use client";
 
-import { Banknote, Clock3, Save, UserPlus } from "lucide-react";
+import { Banknote, Clock3, RotateCcw, Save, UserMinus, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import type { AttendanceRecord, PayrollRecord, StaffRecord } from "@/server/domain/staff";
 
-export function StaffRegister({ staff, attendance, payroll, date, month }: { staff: StaffRecord[]; attendance: AttendanceRecord[]; payroll: PayrollRecord[]; date: string; month: string }) {
+function ResignStaffButton({ person, onDone }: { person: StaffRecord; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function confirmResign() {
+    if (reason.trim().length < 2) { setError("Enter a reason (2+ characters)"); return; }
+    setSaving(true); setError("");
+    try {
+      const response = await fetch(`/api/staff/${person.id}/status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: false, reason })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not update the staff record");
+      setOpen(false); setReason("");
+      onDone();
+    } catch (reasonCaught) {
+      setError(reasonCaught instanceof Error ? reasonCaught.message : "Could not update the staff record");
+    } finally { setSaving(false); }
+  }
+
+  if (!open) return <button className="button soft danger" onClick={() => setOpen(true)} type="button"><UserMinus size={13} /> Mark resigned</button>;
+  return (
+    <span className="void-receipt-prompt">
+      <input aria-label={`Reason ${person.name} is resigning`} onChange={(event) => setReason(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} placeholder="Reason (e.g. resigned)" value={reason} />
+      <button className="button soft danger" disabled={saving} onClick={confirmResign} type="button">{saving ? "Saving…" : "Confirm"}</button>
+      <button className="button ghost" disabled={saving} onClick={() => { setOpen(false); setError(""); setReason(""); }} type="button">Cancel</button>
+      {error ? <small className="form-error-inline">{error}</small> : null}
+    </span>
+  );
+}
+
+function ReactivateStaffButton({ person, onDone }: { person: StaffRecord; onDone: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function reactivate() {
+    setSaving(true); setError("");
+    try {
+      const response = await fetch(`/api/staff/${person.id}/status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: true, reason: "Rejoined" })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not update the staff record");
+      onDone();
+    } catch (reasonCaught) {
+      setError(reasonCaught instanceof Error ? reasonCaught.message : "Could not update the staff record");
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <span>
+      <button className="button soft" disabled={saving} onClick={reactivate} type="button"><RotateCcw size={13} /> {saving ? "Reactivating…" : "Reactivate"}</button>
+      {error ? <small className="form-error-inline">{error}</small> : null}
+    </span>
+  );
+}
+
+export function StaffRegister({ staff, resignedStaff = [], attendance, payroll, date, month }: { staff: StaffRecord[]; resignedStaff?: StaffRecord[]; attendance: AttendanceRecord[]; payroll: PayrollRecord[]; date: string; month: string }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -80,8 +139,12 @@ export function StaffRegister({ staff, attendance, payroll, date, month }: { sta
     <section className="panel panel-pad salary-panel">
       <div className="panel-header"><div><p className="panel-kicker">Monthly payroll setup</p><h2 className="panel-title">Staff salary</h2></div><Banknote size={19} color="#087665" /></div>
       <p className="page-description small">Shift 1: Omapathy and Sampath receive ₹18,000 fixed salary plus ₹150 beta for each worked day. Leave and absence earn no beta. Shift 2: Nagaraj and Kavita receive a fixed ₹18,000 salary.</p>
-      {staff.length ? <div className="salary-list">{staff.map((person) => <form key={person.id} onSubmit={(event) => updateSalary(event, person.id)}><span className="salary-person"><strong>{person.name}</strong><small>{person.assignedShift === "SHIFT_2" ? "Shift 2" : "Shift 1"}{Number(person.dailyBeta ?? 0) ? ` · ₹${person.dailyBeta} daily beta` : " · fixed salary"}</small></span><label><span>Shift</span><select aria-label={`${person.name} assigned shift`} defaultValue={person.assignedShift ?? "SHIFT_1"} name="assignedShift"><option value="SHIFT_1">Shift 1</option><option value="SHIFT_2">Shift 2</option></select></label><label><span>Monthly salary</span><span className="salary-input"><b>₹</b><input aria-label={`${person.name} monthly salary`} defaultValue={person.monthlySalary ?? "0"} min="0" name="monthlySalary" required step="0.01" type="number" /></span></label><label><span>Daily beta</span><span className="salary-input"><b>₹</b><input aria-label={`${person.name} daily beta`} defaultValue={person.dailyBeta ?? "0"} min="0" name="dailyBeta" required step="0.01" type="number" /></span></label><button aria-label={`Save ${person.name} salary`} className="icon-button" disabled={saving} type="submit"><Save size={15} /></button></form>)}</div> : <p className="empty-state">Add a staff member to configure salary.</p>}
+      {staff.length ? <div className="salary-list">{staff.map((person) => <div className="salary-row" key={person.id}><form onSubmit={(event) => updateSalary(event, person.id)}><span className="salary-person"><strong>{person.name}</strong><small>{person.assignedShift === "SHIFT_2" ? "Shift 2" : "Shift 1"}{Number(person.dailyBeta ?? 0) ? ` · ₹${person.dailyBeta} daily beta` : " · fixed salary"}</small></span><label><span>Shift</span><select aria-label={`${person.name} assigned shift`} defaultValue={person.assignedShift ?? "SHIFT_1"} name="assignedShift"><option value="SHIFT_1">Shift 1</option><option value="SHIFT_2">Shift 2</option></select></label><label><span>Monthly salary</span><span className="salary-input"><b>₹</b><input aria-label={`${person.name} monthly salary`} defaultValue={person.monthlySalary ?? "0"} min="0" name="monthlySalary" required step="0.01" type="number" /></span></label><label><span>Daily beta</span><span className="salary-input"><b>₹</b><input aria-label={`${person.name} daily beta`} defaultValue={person.dailyBeta ?? "0"} min="0" name="dailyBeta" required step="0.01" type="number" /></span></label><button aria-label={`Save ${person.name} salary`} className="icon-button" disabled={saving} type="submit"><Save size={15} /></button></form><div className="salary-row-actions"><ResignStaffButton onDone={() => router.refresh()} person={person} /></div></div>)}</div> : <p className="empty-state">Add a staff member to configure salary.</p>}
     </section>
+    {resignedStaff.length ? <section className="panel panel-pad resigned-panel">
+      <div className="panel-header"><div><p className="panel-kicker">Former operators</p><h2 className="panel-title">Resigned staff</h2></div><UserMinus size={19} color="#b3261e" /></div>
+      <div className="resigned-list">{resignedStaff.map((person) => <div className="resigned-row" key={person.id}><span><strong>{person.name}</strong><small>{person.statusReason ? `Resigned · ${person.statusReason}` : "Resigned"}</small></span><ReactivateStaffButton onDone={() => router.refresh()} person={person} /></div>)}</div>
+    </section> : null}
     <section className="panel panel-pad payroll-panel">
       <div className="panel-header"><div><p className="panel-kicker">Attendance-aware settlement</p><h2 className="panel-title">Salary due, paid &amp; balance</h2></div><Banknote size={19} color="#087665" /></div>
       <p className="page-description small">Attendance counts are copied from the register. Daily beta is added automatically for present and late days; leave and absence add no beta, and a half day earns half beta. Other deductions remain owner-entered.</p>

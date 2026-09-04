@@ -80,6 +80,8 @@ export const staffSchema = z.object({
 
 export const staffUpdateSchema = z.object({ monthlySalary: decimal, dailyBeta: decimal.optional(), assignedShift: z.enum(["SHIFT_1", "SHIFT_2"]).optional() });
 
+export const staffStatusSchema = z.object({ active: z.boolean(), reason: z.string().trim().min(2).max(300) });
+
 export const attendanceSchema = z.object({
   staffId: z.string().min(1),
   businessDate: z.string().date(),

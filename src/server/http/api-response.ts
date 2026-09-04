@@ -18,7 +18,7 @@ export function apiError(error: unknown) {
     );
   }
   const message = error instanceof Error ? error.message : "";
-  if (message === "Shift not found" || message === "Fuel receipt not found") {
+  if (message === "Shift not found" || message === "Fuel receipt not found" || message === "Staff member not found") {
     return NextResponse.json({ error: message, code: "NOT_FOUND", requestId }, { status: 404 });
   }
   if (

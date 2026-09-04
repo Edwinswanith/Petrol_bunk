@@ -56,4 +56,24 @@ describe("memory staff store", () => {
       expect.objectContaining({ name: "Kavita", assignedShift: "SHIFT_2", monthlySalary: "18000", dailyBeta: "0" })
     ]);
   });
+
+  it("drops a resigned staff member from the roster but keeps their record for history and reactivation", async () => {
+    const person = await store.addStaff({ name: "Deepa", phone: "", note: "", monthlySalary: "18000", assignedShift: "SHIFT_1", dailyBeta: "0" });
+
+    const resigned = await store.setStaffStatus(person.id, false, "Left for another job");
+    expect(resigned).toMatchObject({ active: false, statusReason: "Left for another job" });
+
+    expect(await store.listStaff()).toEqual([]);
+    expect(await store.listStaff({ includeInactive: true })).toEqual([
+      expect.objectContaining({ id: person.id, name: "Deepa", active: false, statusReason: "Left for another job" })
+    ]);
+
+    const reactivated = await store.setStaffStatus(person.id, true, "Rejoined");
+    expect(reactivated).toMatchObject({ active: true, statusReason: "Rejoined" });
+    expect(await store.listStaff()).toEqual([expect.objectContaining({ id: person.id, name: "Deepa", active: true })]);
+  });
+
+  it("refuses to change the status of a staff member that does not exist", async () => {
+    await expect(store.setStaffStatus("missing-staff", false, "Left")).rejects.toThrow("Staff member not found");
+  });
 });

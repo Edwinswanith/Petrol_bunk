@@ -3,9 +3,10 @@ import type { AddStaffInput, AttendanceRecord, PayrollRecord, SaveAttendanceInpu
 import { calculatePayrollSettlement } from "@/server/services/payroll-service";
 
 export type StaffStore = {
-  listStaff(): Promise<StaffRecord[]>;
+  listStaff(options?: { includeInactive?: boolean }): Promise<StaffRecord[]>;
   addStaff(input: AddStaffInput): Promise<StaffRecord>;
   updateStaff(id: string, input: UpdateStaffInput): Promise<StaffRecord>;
+  setStaffStatus(id: string, active: boolean, reason: string): Promise<StaffRecord>;
   listAttendance(businessDate?: string): Promise<AttendanceRecord[]>;
   saveAttendance(input: SaveAttendanceInput): Promise<AttendanceRecord>;
   listPayroll(month?: string, staffId?: string): Promise<PayrollRecord[]>;
@@ -54,7 +55,7 @@ export function createMemoryStaffStore(options: { seedDefaults?: boolean } = {})
   }
   const store: StaffStore & { clear(): void } = {
     clear() { staff.clear(); attendance.clear(); payroll.clear(); },
-    async listStaff() { return [...staff.values()].filter((record) => record.active).map(normalizeStaff).sort(sortStaff).map(clone); },
+    async listStaff(options = {}) { return [...staff.values()].filter((record) => options.includeInactive || record.active).map(normalizeStaff).sort(sortStaff).map(clone); },
     async addStaff(input) {
       const existing = [...staff.values()].find((record) => record.name.toLowerCase() === input.name.toLowerCase());
       if (existing) return clone(existing);
@@ -66,6 +67,11 @@ export function createMemoryStaffStore(options: { seedDefaults?: boolean } = {})
     async updateStaff(id, input) {
       const current = staff.get(id); if (!current) throw new Error("Staff member not found");
       const record = normalizeStaff({ ...current, ...clone(input), updatedAt: new Date().toISOString() });
+      staff.set(id, record); return clone(record);
+    },
+    async setStaffStatus(id, active, reason) {
+      const current = staff.get(id); if (!current) throw new Error("Staff member not found");
+      const record = normalizeStaff({ ...current, active, statusReason: reason, updatedAt: new Date().toISOString() });
       staff.set(id, record); return clone(record);
     },
     async listAttendance(businessDate) {
@@ -124,9 +130,10 @@ function createMongoStaffStore(): StaffStore {
     return defaultsReady;
   };
   return {
-    async listStaff() {
+    async listStaff(options = {}) {
       await ensureDefaults(); const db = await getMongoDatabase();
-      return (await db.collection<StoredStaff>("staff").find({ active: true }).toArray()).map((record) => normalizeStaff(withoutId(record) as StaffRecord)).sort(sortStaff);
+      const query = options.includeInactive ? {} : { active: true };
+      return (await db.collection<StoredStaff>("staff").find(query).toArray()).map((record) => normalizeStaff(withoutId(record) as StaffRecord)).sort(sortStaff);
     },
     async addStaff(input) {
       const db = await getMongoDatabase();
@@ -141,6 +148,12 @@ function createMongoStaffStore(): StaffStore {
     async updateStaff(id, input) {
       const db = await getMongoDatabase(); const now = new Date().toISOString();
       const updated = await db.collection<StoredStaff>("staff").findOneAndUpdate({ _id: id }, { $set: { ...input, updatedAt: now } }, { returnDocument: "after" });
+      if (!updated) throw new Error("Staff member not found");
+      return normalizeStaff(withoutId(updated) as StaffRecord);
+    },
+    async setStaffStatus(id, active, reason) {
+      const db = await getMongoDatabase(); const now = new Date().toISOString();
+      const updated = await db.collection<StoredStaff>("staff").findOneAndUpdate({ _id: id }, { $set: { active, statusReason: reason, updatedAt: now } }, { returnDocument: "after" });
       if (!updated) throw new Error("Staff member not found");
       return normalizeStaff(withoutId(updated) as StaffRecord);
     },

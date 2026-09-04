@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { openShiftSchema, staffSchema, staffUpdateSchema } from "@/server/http/schemas";
+import { openShiftSchema, staffSchema, staffStatusSchema, staffUpdateSchema } from "@/server/http/schemas";
 
 const baseShift = {
   name: "Morning shift",
@@ -45,5 +45,13 @@ describe("staff salary", () => {
     expect(staffSchema.parse({ name: "Edwin" })).toMatchObject({ monthlySalary: "0", dailyBeta: "0", assignedShift: "SHIFT_1" });
     expect(staffSchema.parse({ name: "Edwin", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_2" })).toMatchObject({ monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_2" });
     expect(() => staffUpdateSchema.parse({ monthlySalary: "-1", dailyBeta: "0", assignedShift: "SHIFT_1" })).toThrow();
+  });
+});
+
+describe("staff status changes", () => {
+  it("requires a reason for marking a staff member resigned or reactivated", () => {
+    expect(staffStatusSchema.parse({ active: false, reason: "Left for another job" })).toMatchObject({ active: false, reason: "Left for another job" });
+    expect(() => staffStatusSchema.parse({ active: false, reason: "" })).toThrow();
+    expect(() => staffStatusSchema.parse({ active: false, reason: "x" })).toThrow();
   });
 });

@@ -10,6 +10,7 @@ export type StaffRecord = {
   dailyBeta?: string;
   assignedShift?: StaffShift;
   active: boolean;
+  statusReason?: string;
   createdAt: string;
   updatedAt: string;
 };
