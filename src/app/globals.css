@@ -338,6 +338,18 @@ textarea:focus-visible {
 .feature-card p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 11px; }
 .feature-link { display: flex; justify-content: space-between; align-items: center; margin-top: 17px; color: var(--petrol-deep); font-weight: 600; font-size: 11px; }
 
+.page-skeleton { display: grid; gap: 22px; }
+.skeleton { position: relative; overflow: hidden; background: var(--line); border-radius: var(--radius-md); }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); animation: skeleton-shimmer 1.3s ease-in-out infinite; }
+@keyframes skeleton-shimmer { 100% { transform: translateX(100%); } }
+.skeleton-title { width: 260px; height: 30px; border-radius: var(--radius-md); }
+.skeleton-subtitle { width: 420px; max-width: 100%; height: 14px; margin-top: 10px; border-radius: 7px; }
+.skeleton-header { margin-bottom: 8px; }
+.skeleton-scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.skeleton-card { height: 92px; border-radius: var(--radius-lg); }
+.skeleton-panel { height: 220px; border-radius: var(--radius-lg); }
+.skeleton-panel.tall { height: 340px; }
+
 .reveal { animation: reveal .55s cubic-bezier(.2,.72,.24,1) both; }
 .reveal-1 { animation-delay: .03s; }
 .reveal-2 { animation-delay: .09s; }

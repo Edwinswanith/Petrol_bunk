@@ -18,9 +18,12 @@ function weekRange(value: string) { const anchor = /^\d{4}-\d{2}-\d{2}$/.test(va
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ month?: string; view?: string; week?: string }> }) {
   const query = await searchParams; const requested = query.month;
-  const month = requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : businessDate().slice(0, 7);
-  const view = query.view === "week" ? "week" : "month"; const week = query.week && /^\d{4}-\d{2}-\d{2}$/.test(query.week) ? query.week : businessDate(); const [from, to] = weekRange(week);
-  const [expenses, shifts, staff, payroll] = await Promise.all([listExpenses(), getOperationsRepository().listShifts(), getStaffStore().listStaff(), getStaffStore().listPayroll(month)]);
+  const [expenses, shifts, staff] = await Promise.all([listExpenses(), getOperationsRepository().listShifts(), getStaffStore().listStaff()]);
+  const openShift = shifts.find((shift) => shift.state === "OPEN");
+  const defaultDate = openShift?.businessDate ?? businessDate();
+  const month = requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : defaultDate.slice(0, 7);
+  const view = query.view === "week" ? "week" : "month"; const week = query.week && /^\d{4}-\d{2}-\d{2}$/.test(query.week) ? query.week : defaultDate; const [from, to] = weekRange(week);
+  const payroll = await getStaffStore().listPayroll(month);
   const analytics = buildFinanceAnalytics({ month, from: view === "week" ? from : undefined, to: view === "week" ? to : undefined, expenses, shifts, staff, payroll });
 
   return <main className="page finance-page">
