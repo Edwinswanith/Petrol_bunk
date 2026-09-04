@@ -3,6 +3,7 @@ import type {
   CloseShiftInput,
   OpenShiftInput,
   PumpShiftCompletionInput,
+  PumpShiftCorrectionInput,
   ShiftRecord
 } from "@/server/domain/operations";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
@@ -11,6 +12,7 @@ import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domai
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
 import { applyPumpShiftCompletion } from "@/server/services/pump-shift-completion-service";
+import { applyPumpShiftEntryCorrection } from "@/server/services/pump-shift-correction-service";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -228,6 +230,14 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       const shift = shifts.get(id);
       if (!shift) throw new Error("Shift not found");
       const updated = applyPumpShiftCompletion(shift, pumpId, input);
+      shifts.set(id, updated);
+      return clone(updated);
+    },
+
+    async correctPumpShiftEntry(id: string, pumpId: string, entryId: string, input: PumpShiftCorrectionInput): Promise<ShiftRecord> {
+      const shift = shifts.get(id);
+      if (!shift) throw new Error("Shift not found");
+      const updated = applyPumpShiftEntryCorrection(shift, pumpId, entryId, input);
       shifts.set(id, updated);
       return clone(updated);
     },

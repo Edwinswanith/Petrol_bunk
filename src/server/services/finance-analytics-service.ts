@@ -70,7 +70,7 @@ export function buildFinanceAnalytics(input: { month: string; from?: string; to?
 
   const allShiftsInPeriod = input.shifts.filter((shift) => inPeriod(shift.businessDate));
   const pumpShifts = allShiftsInPeriod
-    .flatMap((shift) => shift.pumpShiftHistory ?? [])
+    .flatMap((shift) => (shift.pumpShiftHistory ?? []).map((entry) => ({ ...entry, shiftId: shift.id, shiftState: shift.state })))
     .filter((entry) => inPeriod(entry.businessDate))
     .sort((a, b) => b.businessDate.localeCompare(a.businessDate) || b.completedAt.localeCompare(a.completedAt));
 
@@ -87,3 +87,6 @@ export function buildFinanceAnalytics(input: { month: string; from?: string; to?
     pumpShifts
   };
 }
+
+export type FinanceAnalytics = ReturnType<typeof buildFinanceAnalytics>;
+export type FinancePumpShiftEntry = FinanceAnalytics["pumpShifts"][number];

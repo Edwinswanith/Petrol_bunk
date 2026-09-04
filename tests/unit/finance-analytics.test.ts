@@ -88,7 +88,7 @@ describe("buildFinanceAnalytics", () => {
   it("includes an open shift's completed pump-shifts even though it has no reconciliation yet", () => {
     const openShift: ShiftRecord = { ...shift, id: "open-today", state: "OPEN", reconciliation: undefined, businessDate: "2026-05-02", pumpShiftHistory: [pumpShiftEntry({ id: "seg-open", businessDate: "2026-05-02" })] };
     const result = buildFinanceAnalytics({ month: "2026-05", shifts: [shift, openShift], expenses: [], staff });
-    expect(result.pumpShifts).toEqual([expect.objectContaining({ id: "seg-open", pumpId: "pump-a", staffName: "Edwin", litresSold: "100.000" })]);
+    expect(result.pumpShifts).toEqual([expect.objectContaining({ id: "seg-open", pumpId: "pump-a", staffName: "Edwin", litresSold: "100.000", shiftId: "open-today", shiftState: "OPEN" })]);
   });
 
   it("excludes pump-shift history entries outside the requested period and sorts newest first", () => {

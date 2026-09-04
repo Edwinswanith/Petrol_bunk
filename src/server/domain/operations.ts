@@ -101,6 +101,44 @@ export type PumpShiftRecord = {
   products: Array<{ productId: string; productName: string; litresSold: string; revenue: string; grossProfit: string }>;
   nozzles: Record<string, { meteredVolume: string; customerSalesVolume: string; expectedTankOutflow: string; revenue: string }>;
   completedAt: string;
+  corrections?: PumpShiftCorrection[];
+  cascadeAdjustment?: PumpShiftCascadeAdjustment;
+};
+
+export type PumpShiftCorrectionInput = {
+  staffId: string;
+  staffName: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  closingNozzleReadings: Record<string, string>;
+  nonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
+  collections?: SideCollection;
+  reason: string;
+};
+
+export type PumpShiftCorrection = {
+  id: string;
+  correctedAt: string;
+  reason: string;
+  previousClosingNozzleReadings: Record<string, string>;
+  revisedClosingNozzleReadings: Record<string, string>;
+  previousNonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
+  revisedNonSaleDispenses: Array<{ nozzleId: string; volume: string; returnedToTank: boolean }>;
+  previousCollections: SideCollection;
+  revisedCollections: SideCollection;
+  previousStaffId: string;
+  revisedStaffId: string;
+  previousStaffName: string;
+  revisedStaffName: string;
+  previousShiftStartTime?: string;
+  revisedShiftStartTime?: string;
+  previousShiftEndTime?: string;
+  revisedShiftEndTime?: string;
+};
+
+export type PumpShiftCascadeAdjustment = {
+  fromEntryId: string;
+  adjustedAt: string;
 };
 
 export type ShiftCorrection = {

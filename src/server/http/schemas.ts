@@ -71,6 +71,10 @@ export const pumpShiftCompletionSchema = z.object({
   collections: z.object({ cash: decimal, upi: decimal, card: decimal, credit: decimal, other: decimal, declaredCashHandover: decimal }).optional()
 });
 
+export const pumpShiftCorrectionSchema = pumpShiftCompletionSchema.extend({
+  reason: z.string().trim().min(2).max(300)
+});
+
 export const staffSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(20).optional().default(""),
