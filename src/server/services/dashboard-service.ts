@@ -10,6 +10,7 @@ import {
 import type { ShiftRecord } from "@/server/domain/operations";
 import type { ExpenseRecord } from "@/server/repositories/journal-store";
 import type { ForecourtConfiguration, FuelProduct, FuelTank } from "@/server/domain/forecourt";
+import { tankFillLevel } from "@/server/services/tank-fill-level";
 
 const inr = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -30,8 +31,7 @@ function tankSummary(
 ): TankSummary {
   const capacity = new Decimal(tank.capacityLitres);
   const available = new Decimal(stock || "0");
-  const percentage = Math.max(0, Math.min(100, available.div(capacity).times(100).round().toNumber()));
-  const status = percentage <= 20 ? "critical" : percentage <= 45 ? "watch" : "healthy";
+  const { percentage, status } = tankFillLevel(stock, tank.capacityLitres);
   const days = dailyOutflow.isZero() ? "No sales rate" : `${available.div(dailyOutflow).toDecimalPlaces(1)} days`;
   return {
     id: tank.id,

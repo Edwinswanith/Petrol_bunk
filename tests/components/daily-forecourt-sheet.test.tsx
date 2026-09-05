@@ -73,6 +73,20 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByText("monthly payroll")).toBeInTheDocument();
   });
 
+  it("shows a read-only tank level gauge for each fuel above the rate panel, without a value there being editable", () => {
+    const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} tankLevels={[{ tankId: "petrol_tank", name: "Petrol Tank", productName: "Petrol", currentStock: "4000", capacityLitres: "20000", percentage: 20, status: "critical" }, { tankId: "diesel_tank", name: "Diesel Tank", productName: "Diesel", currentStock: "9000", capacityLitres: "20000", percentage: 45, status: "watch" }]} />);
+
+    const board = screen.getByText("Tank levels").closest("section")!;
+    expect(within(board).getByText("Petrol Tank · Petrol")).toBeInTheDocument();
+    expect(within(board).getByText(/4,000 L of 20,000 L/)).toBeInTheDocument();
+    expect(within(board).getByText("critical")).toBeInTheDocument();
+    expect(within(board).getByText("Diesel Tank · Diesel")).toBeInTheDocument();
+    expect(within(board).getByText(/9,000 L of 20,000 L/)).toBeInTheDocument();
+    expect(within(board).getByText("watch")).toBeInTheDocument();
+    expect(within(board).queryByRole("spinbutton")).not.toBeInTheDocument();
+  });
+
   it("starts a fresh pump segment's closing totalizer blank instead of pre-filled with the opening reading", () => {
     const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "14002.910", a_n2: "16018.610", a_n3: "25396.590", a_n4: "31598.040" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);

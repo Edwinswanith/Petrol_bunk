@@ -4,6 +4,7 @@ import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
 import { getStaffStore } from "@/server/repositories/staff-store";
 import { deriveOpeningCarryForward } from "@/server/services/opening-carry-forward-service";
+import { tankFillLevel } from "@/server/services/tank-fill-level";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,11 @@ export default async function DailyForecourtPage() {
     const tank = tanks.get(tankId); const snapshot = active?.tankSnapshots?.find((item) => item.tankId === tankId);
     return { tankId, productId: tank?.productId ?? "", name: snapshot?.name ?? tank?.name ?? tankId, productName: snapshot?.productName ?? products.get(tank?.productId ?? "")?.name ?? "Fuel", currentStock: tank?.currentStock ?? active?.openingTankStocks[tankId] ?? "0" };
   });
+  const tankLevels = tankIds.map((tankId) => {
+    const tank = tanks.get(tankId)!;
+    const productName = products.get(tank.productId)?.name ?? "Fuel";
+    return { tankId, name: tank.name, productName, currentStock: tank.currentStock, capacityLitres: tank.capacityLitres, ...tankFillLevel(tank.currentStock, tank.capacityLitres) };
+  });
 
   return <main className="page daily-page"><DailyForecourtSheet
     activeShift={active ? { id: active.id, name: active.name, businessDate: active.businessDate, startedAt: active.startedAt, openingNozzleReadings: active.openingNozzleReadings, openingTankStocks: active.openingTankStocks, staffAssignments: active.staffAssignments ?? [], pumpShiftHistory: active.pumpShiftHistory } : undefined}
@@ -43,5 +49,6 @@ export default async function DailyForecourtPage() {
     staff={staff.filter((person) => person.active).map((person) => ({ id: person.id, name: person.name, monthlySalary: person.monthlySalary ?? "0", dailyBeta: person.dailyBeta ?? "0", assignedShift: person.assignedShift ?? "SHIFT_1" }))}
     stations={stations}
     tanks={sheetTanks}
+    tankLevels={tankLevels}
   /></main>;
 }

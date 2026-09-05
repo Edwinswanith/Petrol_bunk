@@ -41,6 +41,7 @@ type Station = {
   sideId?: string; sideLabel?: string; nozzleNumber?: number; displayOrder?: number;
 };
 type Tank = { tankId: string; productId: string; name: string; productName: string; currentStock: string };
+type TankLevel = { tankId: string; name: string; productName: string; currentStock: string; capacityLitres: string; percentage: number; status: "critical" | "watch" | "healthy" };
 type Attendance = { staffId: string; staffName: string; status: string };
 type Assignment = { staffId: string; staffName: string; nozzleId: string };
 type ActiveShift = {
@@ -55,6 +56,7 @@ type Props = {
   staff: Staff[];
   stations: Station[];
   tanks: Tank[];
+  tankLevels?: TankLevel[];
   previousReadings: Record<string, string>;
   previousReadingSources?: Record<string, { shiftId: string; businessDate: string }>;
   activeShift?: ActiveShift;
@@ -85,6 +87,10 @@ function inr(value: string | undefined) {
   return `₹${Number(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function quantity(value: string | undefined) {
+  return Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+
 function varianceLabel(value: string | number | undefined) {
   const amount = Number(value ?? 0);
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -111,7 +117,7 @@ function staffOption(person: Staff) {
   return `${person.name} · ${person.assignedShift === "SHIFT_2" ? "Shift 2" : "Shift 1"}`;
 }
 
-export function DailyForecourtSheet({ businessDate, products, staff, stations, tanks, previousReadings, previousReadingSources = {}, activeShift, attendance }: Props) {
+export function DailyForecourtSheet({ businessDate, products, staff, stations, tanks, tankLevels = [], previousReadings, previousReadingSources = {}, activeShift, attendance }: Props) {
   const router = useRouter();
   const pumps = useMemo(() => layout(stations, activeShift?.staffAssignments), [stations, activeShift]);
   const [saving, setSaving] = useState(false);
@@ -369,6 +375,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 
     {closedRecord ? <section className="closed-day-summary"><CheckCircle2 size={26} /><div><strong>Business day closed and inventory updated</strong><p>{inr(closedRecord.reconciliation.sales.expectedSales)} sales · {closedRecord.reconciliation.products?.reduce((sum, item) => sum + Number(item.litresSold), 0).toFixed(3)} L · {inr(closedRecord.reconciliation.sales.tenderVariance)} tender variance</p><div className="form-actions"><Link className="button primary" href={`/shifts/${closedRecord.id}`}>Open permanent day record</Link><Link className="button" href={`/finance?month=${businessDate.slice(0, 7)}`}>View finance</Link><Link className="button" href="/reports">View reports</Link></div></div></section> : null}
     {error ? <p className="form-error" role="alert">{error}</p> : null}
+    {tankLevels.length ? <TankLevelBoard levels={tankLevels} /> : null}
 
     {!activeShift ? <><section className="today-setup-strip"><label className="field"><span>Business date</span><input form="daily-opening-form" value={businessDateDraft} onChange={(event) => setBusinessDateDraft(event.target.value)} name="businessDate" type="date" required /></label><form className="inline-operator-form" onSubmit={addOperator}><label><span>Add operator without leaving Today</span><input name="name" placeholder="Operator name" required /></label><button className="button soft" disabled={saving}><Plus size={14} />Add</button></form><div className="attendance-chips">{attendance.map((record) => <span className={`attendance-chip ${record.status.toLowerCase()}`} key={record.staffId}>{record.staffName} · {record.status}</span>)}</div></section><form id="daily-opening-form" onSubmit={openDay}>
       <section className="daily-rate-board"><header><span><small>Step 1 · Set today&apos;s rates</small><strong>Dealer cost &amp; customer price</strong></span><p>These values are locked into today&apos;s sales record and will not change historical profit.</p></header><div className="daily-price-deck">
@@ -401,6 +408,10 @@ function PumpCollections({ pump, expected, entered, testGroups, values, onChange
   const fields = [["cash", "Cash", "cash collected"], ["upi", "UPI", "UPI collected"], ["card", "Card", "card collected"], ["credit", "Credit", "credit collected"], ["other", "Other", "other collected"], ["handover", "Cash handed over", "cash handed over"]];
   const variance = entered - expected;
   return <div className="side-collections"><div><IndianRupee size={16} /><span><strong>Collections</strong><small>Pump {pump.code}</small></span><strong className="entered-callout">{inr(String(entered))} entered</strong><strong className={`variance-callout ${variance < 0 ? "unbalanced" : "balanced"}`}>{varianceLabel(variance)} variance</strong></div>{testGroups.length > 0 ? <div className="test-fuel-note"><small>Test fuel excluded from sales, taken from the readings above</small><div className="test-fuel-chips">{testGroups.map((group) => <span aria-label={`Pump ${pump.code} ${group.productId} test fuel`} className={`test-fuel-chip ${group.productId}`} key={group.productId}>{group.productName} {group.litres.toFixed(3)} L · {inr(String(group.revenue))}</span>)}</div></div> : null}<div className="collection-grid">{fields.map(([key, label, aria]) => <label key={key}><span>{label}</span><span className="input-wrap"><input aria-label={`Pump ${pump.code} ${aria}`} value={values[key] ?? "0"} onChange={(event) => onChange({ ...values, [key]: event.target.value })} min="0" name={`${key}-${pump.id}`} step="0.01" type="number" /><span className="unit">₹</span></span></label>)}</div></div>;
+}
+
+function TankLevelBoard({ levels }: { levels: TankLevel[] }) {
+  return <section className="panel panel-pad tank-level-board"><header><Gauge size={18} /><span><small>Live, read-only</small><strong>Tank levels</strong></span></header><div className="stock-grid">{levels.map((tank) => <article className={`tank-card ${tank.productName.toLowerCase()}`} key={tank.tankId}><div className="tank-top"><div><p className="panel-kicker">{tank.name} · {tank.productName}</p><strong className="tank-value mono">{quantity(tank.currentStock)} L</strong></div><span className={`status-pill ${tank.status === "healthy" ? "healthy" : "warning"}`}>{tank.status}</span></div><div className="tank-bar"><span style={{ width: `${tank.percentage}%` }} /></div><div className="tank-foot"><span>{quantity(tank.currentStock)} L of {quantity(tank.capacityLitres)} L</span><span>{tank.percentage}% full</span></div></article>)}</div></section>;
 }
 
 function TankDeck({ tanks, mode, openingStocks = {}, values, onChange }: { tanks: Tank[]; mode: "opening" | "closing"; openingStocks?: Record<string, string>; values: Record<string, string>; onChange: (value: Record<string, string>) => void }) {
