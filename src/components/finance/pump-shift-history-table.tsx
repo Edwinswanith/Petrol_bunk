@@ -31,7 +31,7 @@ export function PumpShiftHistoryTable({
         <thead>
           <tr>
             {showDate ? <th>Date</th> : null}
-            <th>Pump</th><th>Employee</th><th>Shift</th><th>Litres</th><th>Revenue</th><th>Collections entered</th><th>Variance</th><th></th>
+            <th>Pump</th><th>Employee</th><th>Shift</th><th>Litres</th><th>Overall sales</th><th>Collections entered</th><th>Variance</th><th></th>
           </tr>
         </thead>
         <tbody>

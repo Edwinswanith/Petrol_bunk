@@ -126,7 +126,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     return [station.stationId, last ? last.closingNozzleReadings[station.stationId] : initialOpenings[station.stationId]];
   }));
   const [openingReadings, setOpeningReadings] = useState<Record<string, string>>(seededOpenings);
-  const [closingReadings, setClosingReadings] = useState<Record<string, string>>({ ...seededOpenings });
+  const [closingReadings, setClosingReadings] = useState<Record<string, string>>({});
   const [operatorIds, setOperatorIds] = useState<Record<string, string>>(Object.fromEntries(pumps.map((pump) => [pump.id, pump.assignment?.staffId ?? ""])));
   const [collections, setCollections] = useState<Record<string, Record<string, string>>>({});
   const [testFuel, setTestFuel] = useState<Record<string, string>>({});

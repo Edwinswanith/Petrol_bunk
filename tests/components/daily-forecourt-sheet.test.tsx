@@ -73,6 +73,15 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByText("monthly payroll")).toBeInTheDocument();
   });
 
+  it("starts a fresh pump segment's closing totalizer blank instead of pre-filled with the opening reading", () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "14002.910", a_n2: "16018.610", a_n3: "25396.590", a_n4: "31598.040" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(14002.91);
+    expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(null);
+    expect(screen.getByLabelText("Pump A petrol total")).toHaveTextContent("0.000 L");
+  });
+
   it("persists an edited active-day rate as the fuel's new default price for future days, not just today's shift", async () => {
     const user = userEvent.setup();
     const stations = [1, 2, 3].map((nozzle) => station("A", nozzle));
@@ -237,6 +246,9 @@ describe("DailyForecourtSheet", () => {
     }));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
 
+    for (const code of ["A-N1", "A-N2", "A-N3", "A-N4"]) {
+      await user.type(screen.getByRole("spinbutton", { name: `${code} closing totalizer` }), "0");
+    }
     await user.click(screen.getByRole("button", { name: /review closing/i }));
 
     const callouts = await screen.findAllByText(/tender variance|cash variance/i);
@@ -257,6 +269,9 @@ describe("DailyForecourtSheet", () => {
     }));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
 
+    for (const code of ["A-N1", "A-N2", "A-N3", "A-N4"]) {
+      await user.type(screen.getByRole("spinbutton", { name: `${code} closing totalizer` }), "0");
+    }
     await user.click(screen.getByRole("button", { name: /review closing/i }));
 
     const callouts = await screen.findAllByText(/tender variance|cash variance/i);
@@ -472,7 +487,7 @@ describe("DailyForecourtSheet", () => {
       const shiftWithHistory = { ...activeShift, pumpShiftHistory: [historyEntry] };
       render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={shiftWithHistory} />);
 
-      expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(500);
+      expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(null);
       expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(500);
       expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("");
       expect(screen.getByLabelText("Pump A shift end time")).toHaveValue("");
