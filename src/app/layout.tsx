@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 
 export const metadata: Metadata = {
-  title: "Forecourt | Petrol Pump Operations",
+  title: "Annai Agencies | Petrol Pump Operations",
   description: "Single-owner petrol pump operations, stock, reconciliation and margin control."
 };
 

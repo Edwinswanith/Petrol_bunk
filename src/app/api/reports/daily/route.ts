@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   const expenseTotal = Decimal.sum(0, ...dayExpenses.map((expense) => expense.amount));
 
   const rows = [
-    row(["Forecourt daily operations export"]),
+    row(["Annai Agencies daily operations export"]),
     row(["Business period", from === to ? from : `${from} to ${to}`]),
     row(["Generated at", new Date().toISOString()]),
     "",

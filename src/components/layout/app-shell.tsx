@@ -57,10 +57,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link className="brand" href="/" aria-label="Forecourt home">
+        <Link className="brand" href="/" aria-label="Annai Agencies home">
           <span className="brand-mark"><Fuel aria-hidden="true" size={20} /></span>
           <span>
-            <strong>Forecourt</strong>
+            <strong>Annai Agencies</strong>
             <small>Owner operations</small>
           </span>
         </Link>
@@ -97,9 +97,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="app-main">
         <header className="mobile-header">
-          <Link className="brand compact" href="/" aria-label="Forecourt home">
+          <Link className="brand compact" href="/" aria-label="Annai Agencies home">
             <span className="brand-mark"><Fuel aria-hidden="true" size={18} /></span>
-            <strong>Forecourt</strong>
+            <strong>Annai Agencies</strong>
           </Link>
           <div className="mobile-header-actions">
             <Link href="/more#alerts" aria-label="View alerts"><Bell size={19} /></Link>
