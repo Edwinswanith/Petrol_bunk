@@ -61,6 +61,11 @@ export const activeShiftCorrectionSchema = z.object({
   reason: z.string().trim().max(300).optional()
 });
 
+export const activeShiftPriceUpdateSchema = z.object({
+  productRates: z.record(z.string(), z.object({ sellingPricePerLitre: decimal, costPricePerLitre: decimal })),
+  reason: z.string().trim().max(300).optional()
+});
+
 export const pumpShiftCompletionSchema = z.object({
   staffId: z.string().min(1),
   staffName: z.string().min(1),

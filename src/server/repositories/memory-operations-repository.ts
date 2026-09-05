@@ -1,5 +1,6 @@
 import type {
   ActiveShiftCorrectionInput,
+  ActiveShiftPriceUpdateInput,
   CloseShiftInput,
   OpenShiftInput,
   PumpShiftCompletionInput,
@@ -10,7 +11,7 @@ import { reconcileShift, requireVarianceExplanation } from "@/server/services/sh
 import Decimal from "decimal.js";
 import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
-import { applyActiveShiftCorrection } from "@/server/services/active-shift-correction-service";
+import { applyActiveShiftCorrection, applyActiveShiftPriceUpdate } from "@/server/services/active-shift-correction-service";
 import { applyPumpShiftCompletion } from "@/server/services/pump-shift-completion-service";
 import { applyPumpShiftEntryCorrection } from "@/server/services/pump-shift-correction-service";
 
@@ -221,6 +222,17 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       const updated = applyActiveShiftCorrection(shift, input);
       shifts.set(id, updated);
       for (const [productId, rate] of Object.entries(input.productRates ?? {})) {
+        try { await getForecourtConfigStore().updateProductPrice(productId, { ...rate, marketReferencePrice: rate.sellingPricePerLitre }); } catch { /* Snapshot-only custom test data. */ }
+      }
+      return clone(updated);
+    },
+
+    async updateActiveShiftPrices(id: string, input: ActiveShiftPriceUpdateInput): Promise<ShiftRecord> {
+      const shift = shifts.get(id);
+      if (!shift) throw new Error("Shift not found");
+      const updated = applyActiveShiftPriceUpdate(shift, input);
+      shifts.set(id, updated);
+      for (const [productId, rate] of Object.entries(input.productRates)) {
         try { await getForecourtConfigStore().updateProductPrice(productId, { ...rate, marketReferencePrice: rate.sellingPricePerLitre }); } catch { /* Snapshot-only custom test data. */ }
       }
       return clone(updated);

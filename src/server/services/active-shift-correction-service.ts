@@ -1,4 +1,4 @@
-import type { ActiveShiftCorrectionInput, ShiftCorrection, ShiftRecord } from "@/server/domain/operations";
+import type { ActiveShiftCorrectionInput, ActiveShiftPriceUpdateInput, ShiftCorrection, ShiftRecord } from "@/server/domain/operations";
 
 const productRates = (shift: ShiftRecord) => Object.fromEntries((shift.stationSnapshots ?? []).map((station) => [station.productId, { sellingPricePerLitre: station.pricePerLitre, costPricePerLitre: station.costPerLitre }]));
 
@@ -19,4 +19,21 @@ export function applyActiveShiftCorrection(shift: ShiftRecord, input: ActiveShif
     previousProductRates: productRates(shift), revisedProductRates: revisedRates
   };
   return { ...shift, openingNozzleReadings: structuredClone(input.openingNozzleReadings), staffAssignments: structuredClone(input.staffAssignments), staffOnDuty: [...new Set(input.staffAssignments.map((assignment) => assignment.staffName))], stationSnapshots, corrections: changed ? [...(shift.corrections ?? []), correction] : shift.corrections, version: shift.version + 1 };
+}
+
+export function applyActiveShiftPriceUpdate(shift: ShiftRecord, input: ActiveShiftPriceUpdateInput, now = new Date().toISOString()): ShiftRecord {
+  if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
+  const revisedRates = { ...productRates(shift), ...input.productRates };
+  const stationSnapshots = (shift.stationSnapshots ?? []).map((station) => {
+    const rate = revisedRates[station.productId];
+    return rate ? { ...station, pricePerLitre: rate.sellingPricePerLitre, costPerLitre: rate.costPricePerLitre, marketReferencePrice: rate.sellingPricePerLitre } : station;
+  });
+  const changed = JSON.stringify(productRates(shift)) !== JSON.stringify(revisedRates);
+  const correction: ShiftCorrection = {
+    id: crypto.randomUUID(), correctedAt: now, reason: input.reason?.trim() || "Owner updated today's fuel prices",
+    previousOpeningNozzleReadings: structuredClone(shift.openingNozzleReadings), revisedOpeningNozzleReadings: structuredClone(shift.openingNozzleReadings),
+    previousStaffAssignments: structuredClone(shift.staffAssignments ?? []), revisedStaffAssignments: structuredClone(shift.staffAssignments ?? []),
+    previousProductRates: productRates(shift), revisedProductRates: revisedRates
+  };
+  return { ...shift, stationSnapshots, corrections: changed ? [...(shift.corrections ?? []), correction] : shift.corrections, version: shift.version + 1 };
 }

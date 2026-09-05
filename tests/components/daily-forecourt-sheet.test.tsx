@@ -105,10 +105,31 @@ describe("DailyForecourtSheet", () => {
     expect(savePricesButton.closest(".active-day-console")).not.toBeNull();
     await user.click(savePricesButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/products/diesel", expect.objectContaining({
-      method: "PATCH", body: JSON.stringify({ sellingPricePerLitre: "99.93", costPricePerLitre: "94.40", marketReferencePrice: "99.93" })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/prices", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ productRates: { petrol: { sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, diesel: { sellingPricePerLitre: "99.93", costPricePerLitre: "94.40" } } })
     })));
     expect(within(savePricesButton.closest(".active-day-console") as HTMLElement).getByText(/saved/i)).toBeInTheDocument();
+  });
+
+  it("saves a price change even when another pump on the same day has no operator selected yet, unlike the shared setup save", async () => {
+    const user = userEvent.setup();
+    const stations = [1, 2, 3].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/shifts/open/prices") return { ok: true, json: async () => ({}) };
+      return { ok: false, json: async () => ({ error: "Please check the highlighted values." }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: [] }} />);
+
+    const sellingField = screen.getByRole("spinbutton", { name: "Petrol active customer selling price" });
+    await user.clear(sellingField); await user.type(sellingField, "108.17");
+
+    await user.click(screen.getByRole("button", { name: "Save prices" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/prices", expect.anything()));
+    expect(screen.queryByText(/please check the highlighted values/i)).not.toBeInTheDocument();
+    expect(await screen.findAllByText(/saved/i)).not.toHaveLength(0);
   });
 
   it("groups each pump's nozzles by fuel so litres, revenue and profit read as one petrol and one diesel total", async () => {

@@ -69,6 +69,11 @@ export type ActiveShiftCorrectionInput = {
   reason?: string;
 };
 
+export type ActiveShiftPriceUpdateInput = {
+  productRates: Record<string, { sellingPricePerLitre: string; costPricePerLitre: string }>;
+  reason?: string;
+};
+
 export type PumpShiftCompletionInput = {
   staffId: string;
   staffName: string;

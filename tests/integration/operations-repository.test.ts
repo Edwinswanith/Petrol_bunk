@@ -201,6 +201,18 @@ describe("MemoryOperationsRepository", () => {
     expect(corrected.corrections).toEqual([expect.objectContaining({ reason: "Corrected morning sheet" })]);
   });
 
+  it("updates only a fuel's price via the dedicated price-only endpoint, without needing valid opening readings or staff assignments", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({ name: "Daily forecourt sheet", businessDate: "2026-09-01", staffOnDuty: ["Arun"], staffAssignments: [{ staffId: "arun", staffName: "Arun", nozzleId: "a_n1" }], stationSnapshots: [{ stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "102.50", costPerLitre: "96.80" }], openingNozzleReadings: { a_n1: "1000" }, openingTankStocks: { petrol_tank: "5000" } }, "price-open");
+
+    const corrected = await repository.updateActiveShiftPrices(shift.id, { productRates: { petrol: { sellingPricePerLitre: "108.17", costPricePerLitre: "96.80" } }, reason: "Owner revised petrol price" });
+
+    expect(corrected.stationSnapshots?.[0]).toEqual(expect.objectContaining({ pricePerLitre: "108.17", costPerLitre: "96.80" }));
+    expect(corrected.openingNozzleReadings).toEqual(shift.openingNozzleReadings);
+    expect(corrected.staffAssignments).toEqual(shift.staffAssignments);
+    expect(corrected.corrections).toEqual([expect.objectContaining({ reason: "Owner revised petrol price" })]);
+  });
+
   it("deducts aggregated station outflow from tank inventory once when a shift closes", async () => {
     const repository = createMemoryOperationsRepository({ seedDemoData: false });
     const shift = await repository.openShift({
