@@ -20,8 +20,7 @@ function weekRange(value: string) { const anchor = /^\d{4}-\d{2}-\d{2}$/.test(va
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ month?: string; view?: string; week?: string }> }) {
   const query = await searchParams; const requested = query.month;
   const [expenses, shifts, staff] = await Promise.all([listExpenses(), getOperationsRepository().listShifts(), getStaffStore().listStaff()]);
-  const openShift = shifts.find((shift) => shift.state === "OPEN");
-  const defaultDate = openShift?.businessDate ?? businessDate();
+  const defaultDate = businessDate();
   const month = requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) ? requested : defaultDate.slice(0, 7);
   const view = query.view === "week" ? "week" : "month"; const week = query.week && /^\d{4}-\d{2}-\d{2}$/.test(query.week) ? query.week : defaultDate; const [from, to] = weekRange(week);
   const payroll = await getStaffStore().listPayroll(month);
