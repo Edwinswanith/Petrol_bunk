@@ -28,9 +28,9 @@ type Rates = Record<string, { cost: string; selling: string }>;
 type OpeningDraft = { businessDate: string; operatorIds: Record<string, string>; openingReadings: Record<string, string>; openingTankStocks: Record<string, string>; rates: Rates };
 type PumpShiftTimes = Record<string, { start: string; end: string }>;
 type ClosingDraft = {
-  operatorIds: Record<string, string>; openingReadings: Record<string, string>; closingReadings: Record<string, string>;
+  closingReadings: Record<string, string>;
   collections: Record<string, Record<string, string>>; testFuel: Record<string, string>; testFuelReturned: Record<string, boolean>;
-  closingTankStocks: Record<string, string>; rates: Rates; activeCorrectionReason: string; varianceExplanation: string;
+  closingTankStocks: Record<string, string>; activeCorrectionReason: string; varianceExplanation: string;
   pumpShiftTimes: PumpShiftTimes;
 };
 type Product = { id: string; code: string; name: string; sellingPricePerLitre: string; costPricePerLitre: string; marketReferencePrice?: string };
@@ -153,15 +153,15 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     hydratedDraftKey.current = key;
     if (activeShift) {
       const draft = readDraft<ClosingDraft>(key); if (!draft) return;
+      // Rates, operator assignments and opening readings are never restored here once a shift is active: they are
+      // already saved server-side (Save prices / Save setup changes) and the freshly loaded server props are the
+      // source of truth. Restoring them from an old local draft would silently shadow a real, later server update.
       // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring saved state from localStorage, an external system
-      if (draft.operatorIds) setOperatorIds(draft.operatorIds);
-      if (draft.openingReadings) setOpeningReadings(draft.openingReadings);
       if (draft.closingReadings) setClosingReadings(draft.closingReadings);
       if (draft.collections) setCollections(draft.collections);
       if (draft.testFuel) setTestFuel(draft.testFuel);
       if (draft.testFuelReturned) setTestFuelReturned((current) => ({ ...current, ...draft.testFuelReturned }));
       if (draft.closingTankStocks) setClosingTankStocks(draft.closingTankStocks);
-      if (draft.rates) setRates(draft.rates);
       if (draft.activeCorrectionReason) setActiveCorrectionReason(draft.activeCorrectionReason);
       if (draft.varianceExplanation) setVarianceExplanation(draft.varianceExplanation);
       if (draft.pumpShiftTimes) setPumpShiftTimes((current) => ({ ...current, ...draft.pumpShiftTimes }));
@@ -184,10 +184,10 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 
   useEffect(() => {
     if (!activeShift || !closingDraftKey) return;
-    writeDraft(closingDraftKey, { operatorIds, openingReadings, closingReadings, collections, testFuel, testFuelReturned, closingTankStocks, rates, activeCorrectionReason, varianceExplanation, pumpShiftTimes } satisfies ClosingDraft);
+    writeDraft(closingDraftKey, { closingReadings, collections, testFuel, testFuelReturned, closingTankStocks, activeCorrectionReason, varianceExplanation, pumpShiftTimes } satisfies ClosingDraft);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reflects the write we just made to localStorage, an external system
     setDraftSavedAt(new Date());
-  }, [activeShift, closingDraftKey, operatorIds, openingReadings, closingReadings, collections, testFuel, testFuelReturned, closingTankStocks, rates, activeCorrectionReason, varianceExplanation, pumpShiftTimes]);
+  }, [activeShift, closingDraftKey, closingReadings, collections, testFuel, testFuelReturned, closingTankStocks, activeCorrectionReason, varianceExplanation, pumpShiftTimes]);
 
   async function openDay(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError("");

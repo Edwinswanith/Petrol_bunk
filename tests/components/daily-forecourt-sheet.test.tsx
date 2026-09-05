@@ -355,6 +355,22 @@ describe("DailyForecourtSheet", () => {
       expect(screen.getByLabelText("Variance explanation")).toHaveValue("Till was short by mistake");
     });
 
+    it("shows the freshly loaded server rates and operator, not a stale local draft saved before an earlier price/setup update", () => {
+      const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
+      localStorage.setItem("forecourt-draft:closing:shift-1", JSON.stringify({
+        operatorIds: { "pump-a": "priya" },
+        openingReadings: { a_n1: "9999" },
+        rates: { petrol: { cost: "50.00", selling: "60.00" }, diesel: { cost: "40.00", selling: "45.00" } }
+      }));
+
+      render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={products} staff={staff} stations={stations} tanks={tanks} activeShift={activeShift} />);
+
+      expect(screen.getByRole("spinbutton", { name: "Petrol active customer selling price" })).toHaveValue(102.5);
+      expect(screen.getByRole("spinbutton", { name: "Diesel active customer selling price" })).toHaveValue(100.5);
+      expect(screen.getByRole("combobox", { name: "Pump A active operator" })).toHaveValue("arun");
+      expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(0);
+    });
+
     it("clears the closing draft once the business day is actually closed", async () => {
       const user = userEvent.setup();
       const preview = { sales: { expectedSales: "0.00", accountedTender: "0.00", tenderVariance: "0.00", expectedCashHandover: "0.00", cashVariance: "0.00" }, nozzles: {}, tanks: {}, sides: [], products: [], staff: [], grossMargin: "0.00", estimatedOperatingProfit: "0.00" };
