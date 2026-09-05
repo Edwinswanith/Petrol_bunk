@@ -250,6 +250,14 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 
   async function persistActiveSetup() {
     if (!activeShift) return;
+    await Promise.all(products.map(async (product) => {
+      const sellingPrice = rates[product.id].selling;
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellingPricePerLitre: sellingPrice, costPricePerLitre: rates[product.id].cost, marketReferencePrice: sellingPrice })
+      });
+      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? `Could not update ${product.name} price`);
+    }));
     const assignments = pumps.flatMap((pump) => { const staffId = operatorIds[pump.id] ?? ""; const staffName = staff.find((person) => person.id === staffId)?.name ?? ""; return pump.stations.map((station) => ({ staffId, staffName, nozzleId: station.stationId })); });
     const response = await fetch(`/api/shifts/${activeShift.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ openingNozzleReadings: openingReadings, staffAssignments: assignments, productRates: Object.fromEntries(products.map((product) => [product.id, { sellingPricePerLitre: rates[product.id].selling, costPricePerLitre: rates[product.id].cost }])), reason: activeCorrectionReason }) });
     const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not save today's setup");

@@ -73,6 +73,23 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByText("monthly payroll")).toBeInTheDocument();
   });
 
+  it("persists an edited active-day rate as the fuel's new default price for future days, not just today's shift", async () => {
+    const user = userEvent.setup();
+    const stations = [1, 2, 3].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    const sellingField = screen.getByRole("spinbutton", { name: "Petrol active customer selling price" });
+    await user.clear(sellingField); await user.type(sellingField, "108.17");
+
+    await user.click(screen.getByRole("button", { name: /save setup changes/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/products/petrol", expect.objectContaining({
+      method: "PATCH", body: JSON.stringify({ sellingPricePerLitre: "108.17", costPricePerLitre: "96.80", marketReferencePrice: "108.17" })
+    })));
+  });
+
   it("groups each pump's nozzles by fuel so litres, revenue and profit read as one petrol and one diesel total", async () => {
     const user = userEvent.setup();
     const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
