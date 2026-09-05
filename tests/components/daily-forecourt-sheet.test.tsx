@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -85,6 +85,52 @@ describe("DailyForecourtSheet", () => {
     expect(within(board).getByText(/9,000 L of 20,000 L/)).toBeInTheDocument();
     expect(within(board).getByText("watch")).toBeInTheDocument();
     expect(within(board).queryByRole("spinbutton")).not.toBeInTheDocument();
+  });
+
+  it("defaults the business date to the oldest unrecorded day and explains the backlog when catching up after an absence", () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-05" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} missingBusinessDays={["2026-09-02", "2026-09-03", "2026-09-04"]} />);
+
+    expect(screen.getByLabelText("Business date")).toHaveValue("2026-09-02");
+    const banner = screen.getByText(/3 business days have no record/i);
+    expect(banner).toHaveTextContent("2026-09-02, 2026-09-03, 2026-09-04");
+  });
+
+  it("does not show a backlog banner or override today's date when there are no missing business days", () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-05" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} />);
+
+    expect(screen.getByLabelText("Business date")).toHaveValue("2026-09-05");
+    expect(screen.queryByText(/business days have no record/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps each backfilled day's draft separate so switching the date field doesn't carry one day's typed readings into another", () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-05" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} missingBusinessDays={["2026-09-02", "2026-09-03"]} />);
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" }), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText("Business date"), { target: { value: "2026-09-03" } });
+
+    expect(screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" })).toHaveValue(null);
+  });
+
+  it("offers to continue with the next missing day right after a backfilled day is closed", async () => {
+    const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
+    const preview = { sales: { expectedSales: "0.00", accountedTender: "0.00", tenderVariance: "0.00", expectedCashHandover: "0.00", cashVariance: "0.00" }, nozzles: {}, tanks: {}, sides: [], products: [], staff: [], grossMargin: "0.00", estimatedOperatingProfit: "0.00" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/preview")) return { ok: true, json: async () => preview };
+      if (url.endsWith("/close")) return { ok: true, json: async () => ({ id: "open-2", reconciliation: preview }) };
+      return { ok: true, json: async () => ({}) };
+    }));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-03" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} missingBusinessDays={["2026-09-02", "2026-09-03", "2026-09-04"]} activeShift={{ id: "open-2", name: "Daily", businessDate: "2026-09-03", startedAt: "2026-09-03T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    for (const item of stations) fireEvent.change(screen.getByRole("spinbutton", { name: `${item.code} closing totalizer` }), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: /review closing/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /close day/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /close day/i }));
+
+    const continueLink = await screen.findByRole("link", { name: /continue with 2026-09-04/i });
+    expect(continueLink).toHaveAttribute("href", "/day");
   });
 
   it("starts a fresh pump segment's closing totalizer blank instead of pre-filled with the opening reading", () => {

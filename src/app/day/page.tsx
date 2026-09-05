@@ -4,6 +4,7 @@ import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
 import { getStaffStore } from "@/server/repositories/staff-store";
 import { deriveOpeningCarryForward } from "@/server/services/opening-carry-forward-service";
+import { findMissingBusinessDays } from "@/server/services/missing-business-days-service";
 import { tankFillLevel } from "@/server/services/tank-fill-level";
 
 export const dynamic = "force-dynamic";
@@ -50,5 +51,6 @@ export default async function DailyForecourtPage() {
     stations={stations}
     tanks={sheetTanks}
     tankLevels={tankLevels}
+    missingBusinessDays={active ? [] : findMissingBusinessDays(shifts, today)}
   /></main>;
 }

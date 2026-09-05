@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, CheckCircle2, Fuel, Gauge, IndianRupee, LockKeyhole, PencilLine, Play, Plus, Save } from "lucide-react";
+import { ArrowRight, Calculator, CalendarClock, CheckCircle2, Fuel, Gauge, IndianRupee, LockKeyhole, PencilLine, Play, Plus, Save } from "lucide-react";
 import Link from "next/link";
 import Decimal from "decimal.js";
 import { useRouter } from "next/navigation";
@@ -57,6 +57,7 @@ type Props = {
   stations: Station[];
   tanks: Tank[];
   tankLevels?: TankLevel[];
+  missingBusinessDays?: string[];
   previousReadings: Record<string, string>;
   previousReadingSources?: Record<string, { shiftId: string; businessDate: string }>;
   activeShift?: ActiveShift;
@@ -117,13 +118,13 @@ function staffOption(person: Staff) {
   return `${person.name} · ${person.assignedShift === "SHIFT_2" ? "Shift 2" : "Shift 1"}`;
 }
 
-export function DailyForecourtSheet({ businessDate, products, staff, stations, tanks, tankLevels = [], previousReadings, previousReadingSources = {}, activeShift, attendance }: Props) {
+export function DailyForecourtSheet({ businessDate, products, staff, stations, tanks, tankLevels = [], missingBusinessDays = [], previousReadings, previousReadingSources = {}, activeShift, attendance }: Props) {
   const router = useRouter();
   const pumps = useMemo(() => layout(stations, activeShift?.staffAssignments), [stations, activeShift]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ShiftReconciliation>();
-  const [closedRecord, setClosedRecord] = useState<{ id: string; reconciliation: ShiftReconciliation }>();
+  const [closedRecord, setClosedRecord] = useState<{ id: string; businessDate: string; reconciliation: ShiftReconciliation }>();
   const initialOpenings = Object.fromEntries(stations.map((station) => [station.stationId, activeShift?.openingNozzleReadings[station.stationId] ?? previousReadings[station.stationId] ?? ""]));
   const [pumpShiftHistory, setPumpShiftHistory] = useState<PumpShiftRecord[]>(activeShift?.pumpShiftHistory ?? []);
   const seededOpenings = Object.fromEntries(stations.map((station) => {
@@ -141,7 +142,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   const [pumpSaving, setPumpSaving] = useState<Record<string, boolean>>({});
   const [pumpSavedAt, setPumpSavedAt] = useState<Record<string, Date>>({});
   const [rates, setRates] = useState<Rates>(Object.fromEntries(products.map((product) => { const snapshot = stations.find((station) => station.productId === product.id); return [product.id, { cost: activeShift ? snapshot?.costPerLitre ?? product.costPricePerLitre : product.costPricePerLitre, selling: activeShift ? snapshot?.pricePerLitre ?? product.sellingPricePerLitre : product.sellingPricePerLitre }]; })));
-  const [businessDateDraft, setBusinessDateDraft] = useState(businessDate);
+  const [businessDateDraft, setBusinessDateDraft] = useState(missingBusinessDays[0] ?? businessDate);
   const [openingTankStocks, setOpeningTankStocks] = useState<Record<string, string>>(Object.fromEntries(tanks.map((tank) => [tank.tankId, tank.currentStock])));
   const [closingTankStocks, setClosingTankStocks] = useState<Record<string, string>>(Object.fromEntries(tanks.map((tank) => [tank.tankId, activeShift?.openingTankStocks[tank.tankId] ?? ""])));
   const [activeCorrectionReason, setActiveCorrectionReason] = useState("");
@@ -149,7 +150,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   const [draftSavedAt, setDraftSavedAt] = useState<Date>();
   const [setupSavedAt, setSetupSavedAt] = useState<Date>();
   const closeKey = useRef<string | undefined>(undefined);
-  const openingDraftKey = `forecourt-draft:opening:${businessDate}`;
+  const openingDraftKey = `forecourt-draft:opening:${businessDateDraft}`;
   const closingDraftKey = activeShift ? `forecourt-draft:closing:${activeShift.id}` : undefined;
   const hydratedDraftKey = useRef<string | undefined>(undefined);
 
@@ -172,14 +173,15 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
       if (draft.varianceExplanation) setVarianceExplanation(draft.varianceExplanation);
       if (draft.pumpShiftTimes) setPumpShiftTimes((current) => ({ ...current, ...draft.pumpShiftTimes }));
     } else {
-      const draft = readDraft<OpeningDraft>(key); if (!draft) return;
-      if (draft.businessDate) setBusinessDateDraft(draft.businessDate);
-      if (draft.operatorIds) setOperatorIds(draft.operatorIds);
-      if (draft.openingReadings) setOpeningReadings(draft.openingReadings);
-      if (draft.openingTankStocks) setOpeningTankStocks(draft.openingTankStocks);
-      if (draft.rates) setRates(draft.rates);
+      const draft = readDraft<OpeningDraft>(key);
+      // Every backfilled business date gets its own draft key, so switching the date field must fully reset these
+      // fields to that date's own draft (or its blank defaults) rather than leaving another date's typed values behind.
+      setOperatorIds(draft?.operatorIds ?? {});
+      setOpeningReadings(draft?.openingReadings ?? Object.fromEntries(stations.map((station) => [station.stationId, previousReadings[station.stationId] ?? ""])));
+      setOpeningTankStocks(draft?.openingTankStocks ?? Object.fromEntries(tanks.map((tank) => [tank.tankId, tank.currentStock])));
+      setRates(draft?.rates ?? Object.fromEntries(products.map((product) => [product.id, { cost: product.costPricePerLitre, selling: product.sellingPricePerLitre }])));
     }
-  }, [activeShift, openingDraftKey, closingDraftKey]);
+  }, [activeShift, openingDraftKey, closingDraftKey, previousReadings, products, stations, tanks]);
 
   useEffect(() => {
     if (activeShift) return;
@@ -344,7 +346,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     setSaving(true); setError("");
     try {
       const response = await fetch(`/api/shifts/${activeShift.id}/close`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": closeKey.current ??= crypto.randomUUID() }, body: JSON.stringify(closePayload()) });
-      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not close the business day"); setClosedRecord(body); if (closingDraftKey) clearDraft(closingDraftKey); router.refresh();
+      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not close the business day"); setClosedRecord({ ...body, businessDate: activeShift.businessDate }); if (closingDraftKey) clearDraft(closingDraftKey); router.refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not close the business day"); }
     finally { setSaving(false); }
   }
@@ -367,15 +369,18 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not add operator"); } finally { setSaving(false); }
   }
 
+  const nextMissingDay = closedRecord ? missingBusinessDays.find((date) => date > closedRecord.businessDate) : undefined;
+
   return <div className="daily-sheet">
     <section className="day-command panel">
       <div><p className="eyebrow">{businessDate} · Owner entry</p><h1>Today&apos;s forecourt sheet</h1><p>One page for staff, eight totalizers, collections and tank reconciliation.</p></div>
       <div className="day-status"><span className={`status-pill ${activeShift ? "warning" : "healthy"}`}>{closedRecord ? "CLOSED" : activeShift ? "OPEN" : "READY"}</span><small>{activeShift ? `Started ${new Date(activeShift.startedAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}` : "Confirm the morning position"}</small></div>
     </section>
 
-    {closedRecord ? <section className="closed-day-summary"><CheckCircle2 size={26} /><div><strong>Business day closed and inventory updated</strong><p>{inr(closedRecord.reconciliation.sales.expectedSales)} sales · {closedRecord.reconciliation.products?.reduce((sum, item) => sum + Number(item.litresSold), 0).toFixed(3)} L · {inr(closedRecord.reconciliation.sales.tenderVariance)} tender variance</p><div className="form-actions"><Link className="button primary" href={`/shifts/${closedRecord.id}`}>Open permanent day record</Link><Link className="button" href={`/finance?month=${businessDate.slice(0, 7)}`}>View finance</Link><Link className="button" href="/reports">View reports</Link></div></div></section> : null}
+    {closedRecord ? <section className="closed-day-summary"><CheckCircle2 size={26} /><div><strong>Business day closed and inventory updated</strong><p>{inr(closedRecord.reconciliation.sales.expectedSales)} sales · {closedRecord.reconciliation.products?.reduce((sum, item) => sum + Number(item.litresSold), 0).toFixed(3)} L · {inr(closedRecord.reconciliation.sales.tenderVariance)} tender variance</p><div className="form-actions">{nextMissingDay ? <Link className="button primary" href="/day">Continue with {nextMissingDay}<ArrowRight size={15} /></Link> : null}<Link className={nextMissingDay ? "button" : "button primary"} href={`/shifts/${closedRecord.id}`}>Open permanent day record</Link><Link className="button" href={`/finance?month=${businessDate.slice(0, 7)}`}>View finance</Link><Link className="button" href="/reports">View reports</Link></div></div></section> : null}
     {error ? <p className="form-error" role="alert">{error}</p> : null}
     {tankLevels.length ? <TankLevelBoard levels={tankLevels} /> : null}
+    {!activeShift && missingBusinessDays.length ? <section className="catch-up-banner"><CalendarClock size={18} /><div><strong>{missingBusinessDays.length} business {missingBusinessDays.length === 1 ? "day has" : "days have"} no record: {missingBusinessDays.join(", ")}</strong><small>The business date below is already set to the oldest one, {missingBusinessDays[0]} — enter it exactly as noted down, then close it to move on to the next.</small></div></section> : null}
 
     {!activeShift ? <><section className="today-setup-strip"><label className="field"><span>Business date</span><input form="daily-opening-form" value={businessDateDraft} onChange={(event) => setBusinessDateDraft(event.target.value)} name="businessDate" type="date" required /></label><form className="inline-operator-form" onSubmit={addOperator}><label><span>Add operator without leaving Today</span><input name="name" placeholder="Operator name" required /></label><button className="button soft" disabled={saving}><Plus size={14} />Add</button></form><div className="attendance-chips">{attendance.map((record) => <span className={`attendance-chip ${record.status.toLowerCase()}`} key={record.staffId}>{record.staffName} · {record.status}</span>)}</div></section><form id="daily-opening-form" onSubmit={openDay}>
       <section className="daily-rate-board"><header><span><small>Step 1 · Set today&apos;s rates</small><strong>Dealer cost &amp; customer price</strong></span><p>These values are locked into today&apos;s sales record and will not change historical profit.</p></header><div className="daily-price-deck">
