@@ -91,6 +91,15 @@ describe("buildFinanceAnalytics", () => {
     expect(result.pumpShifts).toEqual([expect.objectContaining({ id: "seg-open", pumpId: "pump-a", staffName: "Edwin", litresSold: "100.000", shiftId: "open-today", shiftState: "OPEN" })]);
   });
 
+  it("includes a completed pump-shift entry whose own business date differs from its still-open parent shift's stale opening date", () => {
+    const staleOpenShift: ShiftRecord = {
+      ...shift, id: "stale-open", state: "OPEN", reconciliation: undefined, businessDate: "2026-04-01",
+      pumpShiftHistory: [pumpShiftEntry({ id: "seg-real-date", businessDate: "2026-05-01" })]
+    };
+    const result = buildFinanceAnalytics({ month: "2026-05", shifts: [staleOpenShift], expenses: [], staff });
+    expect(result.pumpShifts).toEqual([expect.objectContaining({ id: "seg-real-date", shiftId: "stale-open", shiftState: "OPEN" })]);
+  });
+
   it("excludes pump-shift history entries outside the requested period and sorts newest first", () => {
     const withinRange = pumpShiftEntry({ id: "seg-within", businessDate: "2026-05-01", completedAt: "2026-05-01T08:00:00.000Z" });
     const laterSameDay = pumpShiftEntry({ id: "seg-later", businessDate: "2026-05-01", completedAt: "2026-05-01T16:00:00.000Z" });

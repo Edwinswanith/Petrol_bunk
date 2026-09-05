@@ -68,8 +68,7 @@ export function buildFinanceAnalytics(input: { month: string; from?: string; to?
     category, amount: money(Decimal.sum(0, ...expenses.filter((expense) => expense.category === category).map((expense) => expense.amount)))
   }));
 
-  const allShiftsInPeriod = input.shifts.filter((shift) => inPeriod(shift.businessDate));
-  const pumpShifts = allShiftsInPeriod
+  const pumpShifts = input.shifts
     .flatMap((shift) => (shift.pumpShiftHistory ?? []).map((entry) => ({ ...entry, shiftId: shift.id, shiftState: shift.state })))
     .filter((entry) => inPeriod(entry.businessDate))
     .sort((a, b) => b.businessDate.localeCompare(a.businessDate) || b.completedAt.localeCompare(a.completedAt));
