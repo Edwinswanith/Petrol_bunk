@@ -141,6 +141,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   const [activeCorrectionReason, setActiveCorrectionReason] = useState("");
   const [varianceExplanation, setVarianceExplanation] = useState("");
   const [draftSavedAt, setDraftSavedAt] = useState<Date>();
+  const [setupSavedAt, setSetupSavedAt] = useState<Date>();
   const closeKey = useRef<string | undefined>(undefined);
   const openingDraftKey = `forecourt-draft:opening:${businessDate}`;
   const closingDraftKey = activeShift ? `forecourt-draft:closing:${activeShift.id}` : undefined;
@@ -265,7 +266,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 
   async function saveActiveSetup() {
     setSaving(true); setError("");
-    try { await persistActiveSetup(); setPreview(undefined); }
+    try { await persistActiveSetup(); setPreview(undefined); setSetupSavedAt(new Date()); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save today's setup"); }
     finally { setSaving(false); }
   }
@@ -369,7 +370,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
       <label className="field active-correction-reason"><span>Reason for an opening, employee or rate correction</span><input name="activeCorrectionReason" onChange={(event) => setActiveCorrectionReason(event.target.value)} placeholder="Optional unless correcting the morning sheet" value={activeCorrectionReason} /></label>
       <label className="field variance-note"><span>Variance explanation</span><textarea name="varianceExplanation" onChange={(event) => setVarianceExplanation(event.target.value)} placeholder="Explain any payment, cash or physical tank difference before closing." value={varianceExplanation} /></label>
       {preview ? <ReconciliationPreview preview={preview} /> : null}
-      <div className="daily-sticky-action"><span><strong>{preview ? `${inr(preview.sales.expectedSales)} expected · ${inr(preview.sales.accountedTender)} entered` : "Keep setup and closing on this page"}</strong>{preview ? <strong className={`variance-callout ${Number(preview.sales.tenderVariance) < 0 ? "unbalanced" : "balanced"}`}>{varianceLabel(preview.sales.tenderVariance)} tender variance</strong> : <small>Save setup changes, then review the canonical server calculation.</small>}</span>{draftSavedAt ? <span className="draft-saved-indicator"><Save size={14} />Draft saved {draftSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}<div className="form-actions"><button className="button soft" disabled={saving} onClick={saveActiveSetup} type="button"><PencilLine size={15} />Save setup changes</button><button className="button" disabled={saving} type="submit"><Calculator size={16} />{saving ? "Calculating…" : "Review closing"}</button><button className="button primary" disabled={saving || !preview} onClick={closeDay} type="button"><LockKeyhole size={16} />Close day &amp; update tanks</button></div></div>
+      <div className="daily-sticky-action"><span><strong>{preview ? `${inr(preview.sales.expectedSales)} expected · ${inr(preview.sales.accountedTender)} entered` : "Keep setup and closing on this page"}</strong>{preview ? <strong className={`variance-callout ${Number(preview.sales.tenderVariance) < 0 ? "unbalanced" : "balanced"}`}>{varianceLabel(preview.sales.tenderVariance)} tender variance</strong> : <small>Save setup changes, then review the canonical server calculation.</small>}</span>{setupSavedAt ? <span className="draft-saved-indicator"><CheckCircle2 size={14} />Rates &amp; setup saved {setupSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : draftSavedAt ? <span className="draft-saved-indicator"><Save size={14} />Draft saved {draftSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}<div className="form-actions"><button className="button soft" disabled={saving} onClick={saveActiveSetup} type="button"><PencilLine size={15} />Save setup changes</button><button className="button" disabled={saving} type="submit"><Calculator size={16} />{saving ? "Calculating…" : "Review closing"}</button><button className="button primary" disabled={saving || !preview} onClick={closeDay} type="button"><LockKeyhole size={16} />Close day &amp; update tanks</button></div></div>
     </form> : null}
   </div>;
 }

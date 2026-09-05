@@ -45,6 +45,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
+  useEffect(() => {
+    const blurNumberInputOnWheel = () => {
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement && active.type === "number") active.blur();
+    };
+    document.addEventListener("wheel", blurNumberInputOnWheel, { passive: true });
+    return () => document.removeEventListener("wheel", blurNumberInputOnWheel);
+  }, []);
+
   return (
     <div className="app-shell">
       <aside className="sidebar">

@@ -88,6 +88,7 @@ describe("DailyForecourtSheet", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/products/petrol", expect.objectContaining({
       method: "PATCH", body: JSON.stringify({ sellingPricePerLitre: "108.17", costPricePerLitre: "96.80", marketReferencePrice: "108.17" })
     })));
+    expect(await screen.findByText(/rates.*setup saved/i)).toBeInTheDocument();
   });
 
   it("groups each pump's nozzles by fuel so litres, revenue and profit read as one petrol and one diesel total", async () => {
