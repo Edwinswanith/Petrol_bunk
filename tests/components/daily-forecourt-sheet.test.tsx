@@ -91,6 +91,26 @@ describe("DailyForecourtSheet", () => {
     expect(await screen.findByText(/rates.*setup saved/i)).toBeInTheDocument();
   });
 
+  it("offers a Save prices button right next to the reseller/customer price fields, not only the distant Save setup changes button", async () => {
+    const user = userEvent.setup();
+    const stations = [1, 2, 3].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    const sellingField = screen.getByRole("spinbutton", { name: "Diesel active customer selling price" });
+    await user.clear(sellingField); await user.type(sellingField, "99.93");
+
+    const savePricesButton = screen.getByRole("button", { name: "Save prices" });
+    expect(savePricesButton.closest(".active-day-console")).not.toBeNull();
+    await user.click(savePricesButton);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/products/diesel", expect.objectContaining({
+      method: "PATCH", body: JSON.stringify({ sellingPricePerLitre: "99.93", costPricePerLitre: "94.40", marketReferencePrice: "99.93" })
+    })));
+    expect(within(savePricesButton.closest(".active-day-console") as HTMLElement).getByText(/saved/i)).toBeInTheDocument();
+  });
+
   it("groups each pump's nozzles by fuel so litres, revenue and profit read as one petrol and one diesel total", async () => {
     const user = userEvent.setup();
     const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
