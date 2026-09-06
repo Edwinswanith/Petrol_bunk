@@ -86,7 +86,7 @@ describe("DailyForecourtSheet", () => {
     const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-04" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-04", startedAt: "2026-09-04T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
 
-    expect(screen.getByText("Recording for")).toBeInTheDocument();
+    expect(screen.getByText("Recording for: 4 September 2026")).toBeInTheDocument();
     const dateField = screen.getByLabelText("Active business date");
     expect(dateField).toHaveValue("2026-09-04");
     expect(screen.getByRole("button", { name: /save date/i })).toBeDisabled();
