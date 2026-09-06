@@ -1,7 +1,6 @@
 import { calculatePumpShiftSummary } from "@/server/calculations/pump-shift-summary";
 import type { PumpShiftCompletionInput, PumpShiftRecord, ShiftRecord } from "@/server/domain/operations";
 import { pumpGroupId, pumpGroupLabel } from "@/server/domain/pump-grouping";
-import { businessDate } from "@/lib/business-time";
 
 export function applyPumpShiftCompletion(shift: ShiftRecord, pumpId: string, input: PumpShiftCompletionInput, now = new Date().toISOString()): ShiftRecord {
   if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
@@ -27,7 +26,7 @@ export function applyPumpShiftCompletion(shift: ShiftRecord, pumpId: string, inp
 
   const record: PumpShiftRecord = {
     id: crypto.randomUUID(), pumpId, pumpLabel: pumpGroupLabel(stations[0], pumpId),
-    staffId: input.staffId, staffName: input.staffName, businessDate: businessDate(new Date(now)),
+    staffId: input.staffId, staffName: input.staffName, businessDate: shift.businessDate,
     shiftStartTime: input.shiftStartTime, shiftEndTime: input.shiftEndTime,
     openingNozzleReadings, closingNozzleReadings: input.closingNozzleReadings, nonSaleDispenses,
     collections: { cash: summary.cash, upi: summary.upi, card: summary.card, credit: summary.credit, other: summary.other, declaredCashHandover: summary.declaredCashHandover },

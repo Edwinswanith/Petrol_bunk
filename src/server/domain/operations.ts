@@ -74,6 +74,11 @@ export type ActiveShiftPriceUpdateInput = {
   reason?: string;
 };
 
+export type ActiveShiftDateCorrectionInput = {
+  businessDate: string;
+  reason?: string;
+};
+
 export type PumpShiftCompletionInput = {
   staffId: string;
   staffName: string;
@@ -152,6 +157,7 @@ export type ShiftCorrection = {
   previousStaffAssignments: StaffAssignment[]; revisedStaffAssignments: StaffAssignment[];
   previousProductRates: Record<string, { sellingPricePerLitre: string; costPricePerLitre: string }>;
   revisedProductRates: Record<string, { sellingPricePerLitre: string; costPricePerLitre: string }>;
+  previousBusinessDate?: string; revisedBusinessDate?: string;
 };
 
 export type CloseShiftInput = {

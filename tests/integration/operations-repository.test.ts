@@ -213,6 +213,17 @@ describe("MemoryOperationsRepository", () => {
     expect(corrected.corrections).toEqual([expect.objectContaining({ reason: "Owner revised petrol price" })]);
   });
 
+  it("corrects an active shift's business date and carries that date onto every pump-shift segment completed afterward", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({ name: "Daily forecourt sheet", businessDate: "2026-09-04", staffOnDuty: ["Arun"], staffAssignments: [{ staffId: "arun", staffName: "Arun", nozzleId: "a_n1" }], stationSnapshots: [{ stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "102.50", costPerLitre: "96.80" }], openingNozzleReadings: { a_n1: "1000" }, openingTankStocks: { petrol_tank: "5000" } }, "date-open");
+
+    const corrected = await repository.updateActiveShiftDate(shift.id, { businessDate: "2026-09-05", reason: "Actually backfilling the 5th" });
+    expect(corrected.businessDate).toBe("2026-09-05");
+
+    const completed = await repository.completePumpShift(shift.id, "a_n1", { staffId: "arun", staffName: "Arun", closingNozzleReadings: { a_n1: "1050" }, nonSaleDispenses: [] });
+    expect(completed.pumpShiftHistory?.[0]).toMatchObject({ businessDate: "2026-09-05" });
+  });
+
   it("deducts aggregated station outflow from tank inventory once when a shift closes", async () => {
     const repository = createMemoryOperationsRepository({ seedDemoData: false });
     const shift = await repository.openShift({

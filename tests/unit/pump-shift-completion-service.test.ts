@@ -19,7 +19,7 @@ function staleShift(overrides: Partial<ShiftRecord> = {}): ShiftRecord {
 }
 
 describe("applyPumpShiftCompletion", () => {
-  it("stamps a completed segment with the real calendar date it was completed on, not the shift's original opening date", () => {
+  it("stamps a completed segment with the shift's own business date, not the real calendar date it happens to be completed on", () => {
     const shift = staleShift();
 
     const result = applyPumpShiftCompletion(shift, "pump-a", {
@@ -27,11 +27,10 @@ describe("applyPumpShiftCompletion", () => {
       closingNozzleReadings: { a_n1: "100", a_n2: "50" }, nonSaleDispenses: []
     }, "2026-09-05T04:00:00.000Z");
 
-    expect(result.pumpShiftHistory?.[0]).toMatchObject({ businessDate: "2026-09-05" });
-    expect(shift.businessDate).toBe("2026-08-31");
+    expect(result.pumpShiftHistory?.[0]).toMatchObject({ businessDate: "2026-08-31", completedAt: "2026-09-05T04:00:00.000Z" });
   });
 
-  it("still stamps today's date on the second segment of a chain that spans a stale shift", () => {
+  it("stamps the same shift business date on every later segment of a chain, regardless of when each is completed", () => {
     const shift = staleShift({
       pumpShiftHistory: [{
         id: "seg-1", pumpId: "pump-a", pumpLabel: "Pump A", staffId: "staff-arun", staffName: "Arun",
@@ -49,6 +48,6 @@ describe("applyPumpShiftCompletion", () => {
       closingNozzleReadings: { a_n1: "200", a_n2: "150" }, nonSaleDispenses: []
     }, "2026-09-05T04:00:00.000Z");
 
-    expect(result.pumpShiftHistory?.[1]).toMatchObject({ businessDate: "2026-09-05", openingNozzleReadings: { a_n1: "100", a_n2: "50" } });
+    expect(result.pumpShiftHistory?.[1]).toMatchObject({ businessDate: "2026-08-31", openingNozzleReadings: { a_n1: "100", a_n2: "50" } });
   });
 });

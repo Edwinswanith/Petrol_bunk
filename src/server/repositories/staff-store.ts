@@ -9,6 +9,7 @@ export type StaffStore = {
   setStaffStatus(id: string, active: boolean, reason: string): Promise<StaffRecord>;
   listAttendance(businessDate?: string): Promise<AttendanceRecord[]>;
   saveAttendance(input: SaveAttendanceInput): Promise<AttendanceRecord>;
+  deleteAttendance(staffId: string, businessDate: string): Promise<void>;
   listPayroll(month?: string, staffId?: string): Promise<PayrollRecord[]>;
   savePayroll(input: SavePayrollInput): Promise<PayrollRecord>;
 };
@@ -91,6 +92,9 @@ export function createMemoryStaffStore(options: { seedDefaults?: boolean } = {})
       };
       attendance.set(id, record);
       return clone(record);
+    },
+    async deleteAttendance(staffId, businessDate) {
+      attendance.delete(`${staffId}:${businessDate}`);
     },
     async listPayroll(month, staffId) {
       return [...payroll.values()].filter((record) => (!month || record.month === month) && (!staffId || record.staffId === staffId)).sort((a, b) => b.month.localeCompare(a.month)).map(clone);
@@ -176,6 +180,10 @@ function createMongoStaffStore(): StaffStore {
       };
       await db.collection<StoredAttendance>("attendance").replaceOne({ _id: id }, { ...record } as StoredAttendance, { upsert: true });
       return record;
+    },
+    async deleteAttendance(staffId, businessDate) {
+      const db = await getMongoDatabase();
+      await db.collection<StoredAttendance>("attendance").deleteOne({ _id: `${staffId}:${businessDate}` });
     },
     async listPayroll(month, staffId) {
       const db = await getMongoDatabase(); const query: Record<string, string> = {};

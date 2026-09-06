@@ -82,12 +82,31 @@ describe("DailyForecourtSheet", () => {
     expect(chips.map((chip) => chip.textContent)).toEqual(["Petrol", "Diesel"]);
   });
 
-  it("shows a fixed, non-editable business date banner above Pump 1 once a day is already open", () => {
+  it("shows the business date above Pump 1 once a day is already open, editable at any time", async () => {
     const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-04" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-04", startedAt: "2026-09-04T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
 
-    expect(screen.getByText(/Recording for/i)).toHaveTextContent("Recording for: 4 September 2026");
-    expect(screen.queryByLabelText("Business date")).not.toBeInTheDocument();
+    expect(screen.getByText("Recording for")).toBeInTheDocument();
+    const dateField = screen.getByLabelText("Active business date");
+    expect(dateField).toHaveValue("2026-09-04");
+    expect(screen.getByRole("button", { name: /save date/i })).toBeDisabled();
+  });
+
+  it("lets the owner correct an already-open day's business date at any time and saves it", async () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/shifts/open/business-date") return { ok: true, json: async () => ({ id: "open", businessDate: "2026-09-05" }) };
+      return { ok: true, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-04" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-04", startedAt: "2026-09-04T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    fireEvent.change(screen.getByLabelText("Active business date"), { target: { value: "2026-09-05" } });
+    expect(screen.getByRole("button", { name: /save date/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: /save date/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/business-date", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ businessDate: "2026-09-05" }) })));
+    await screen.findByText(/date saved/i);
   });
 
   it("shows a read-only tank level gauge for each fuel above the rate panel, without a value there being editable", () => {

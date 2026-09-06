@@ -92,10 +92,6 @@ function quantity(value: string | undefined) {
   return Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 }
 
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00Z`));
-}
-
 function varianceLabel(value: string | number | undefined) {
   const amount = Number(value ?? 0);
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -153,6 +149,14 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   const [varianceExplanation, setVarianceExplanation] = useState("");
   const [draftSavedAt, setDraftSavedAt] = useState<Date>();
   const [setupSavedAt, setSetupSavedAt] = useState<Date>();
+  const [activeBusinessDateDraft, setActiveBusinessDateDraft] = useState(activeShift?.businessDate ?? "");
+  const [dateSaving, setDateSaving] = useState(false);
+  const [dateSavedAt, setDateSavedAt] = useState<Date>();
+  const activeBusinessDate = activeShift?.businessDate;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs the draft from the server-driven prop, an external system
+    if (activeBusinessDate) setActiveBusinessDateDraft(activeBusinessDate);
+  }, [activeBusinessDate]);
   const closeKey = useRef<string | undefined>(undefined);
   const openingDraftKey = `forecourt-draft:opening:${businessDateDraft}`;
   const closingDraftKey = activeShift ? `forecourt-draft:closing:${activeShift.id}` : undefined;
@@ -297,6 +301,20 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     finally { setSaving(false); }
   }
 
+  async function saveBusinessDate() {
+    if (!activeShift) return;
+    setDateSaving(true); setError("");
+    try {
+      const response = await fetch(`/api/shifts/${activeShift.id}/business-date`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessDate: activeBusinessDateDraft })
+      });
+      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not update the business date");
+      setDateSavedAt(new Date()); router.refresh();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update the business date"); }
+    finally { setDateSaving(false); }
+  }
+
   async function completePumpShift(pump: Pump) {
     if (!activeShift) return;
     const staffId = operatorIds[pump.id] ?? "";
@@ -395,7 +413,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
       <div className="daily-sticky-action"><span><strong>{stations.length} nozzles · {pumps.length} staff positions</strong><small>Opening values and prices are snapshotted for today.</small></span>{draftSavedAt ? <span className="draft-saved-indicator"><Save size={14} />Draft saved {draftSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}<button className="button primary" disabled={saving || !staff.length} type="submit"><Play size={16} />{saving ? "Starting…" : "Start business day"}</button></div>
     </form></> : !closedRecord ? <form id="daily-closing-form" onSubmit={review}>
       <section className="active-day-console"><div className="active-day-heading"><span><small>Open day control centre</small><strong>Rates, openings and employees remain correctable until close</strong></span><span className="payroll-commitment"><small>Salary commitment</small><strong>{inr(String(monthlyPayroll))}</strong><em>monthly payroll</em></span></div><div className="active-rate-grid">{[...products].sort((a, b) => (a.code === "PETROL" ? -1 : b.code === "PETROL" ? 1 : 0)).map((product) => <article key={product.id}><span className={`fuel-chip ${product.id}`}>{product.name}</span><label><span>Reseller purchase</span><span className="input-wrap"><input aria-label={`${product.name} active reseller purchase price`} min="0" onChange={(event) => setRates({ ...rates, [product.id]: { ...rates[product.id], cost: event.target.value } })} step="0.01" type="number" value={rates[product.id]?.cost ?? ""} /><span className="unit">₹</span></span></label><label><span>Customer selling</span><span className="input-wrap"><input aria-label={`${product.name} active customer selling price`} min="0" onChange={(event) => setRates({ ...rates, [product.id]: { ...rates[product.id], selling: event.target.value } })} step="0.01" type="number" value={rates[product.id]?.selling ?? ""} /><span className="unit">₹</span></span></label><span className="rate-margin"><small>Margin / L</small><strong>{inr(String(Number(rates[product.id]?.selling || 0) - Number(rates[product.id]?.cost || 0)))}</strong></span></article>)}</div><div className="pump-save-row"><button className="button soft" disabled={saving} onClick={savePrices} type="button"><PencilLine size={15} />{saving ? "Saving…" : "Save prices"}</button>{setupSavedAt ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Saved {setupSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}</div></section>
-      <div className="recording-date-banner"><CalendarClock size={16} /><span><strong>Recording for: {dateLabel(activeShift.businessDate)}</strong><small>Set when this day was opened — not editable now</small></span></div>
+      <div className="recording-date-banner"><CalendarClock size={16} /><span><strong>Recording for</strong><small>Change this if you&apos;re backfilling a different day</small></span><input aria-label="Active business date" onChange={(event) => setActiveBusinessDateDraft(event.target.value)} type="date" value={activeBusinessDateDraft} /><button className="button soft" disabled={dateSaving || !activeBusinessDateDraft || activeBusinessDateDraft === activeShift.businessDate} onClick={saveBusinessDate} type="button">{dateSaving ? "Saving…" : "Save date"}</button>{dateSavedAt ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Date saved {dateSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}</div>
       <PumpClosingDeck pumps={pumps} staff={staff} openingReadings={openingReadings} setOpeningReadings={setOpeningReadings} operatorIds={operatorIds} setOperatorIds={setOperatorIds} closingReadings={closingReadings} setClosingReadings={setClosingReadings} litres={litres} meteredLitres={meteredLitres} revenue={stationRevenue} profit={stationProfit} liveRevenue={liveRevenue} testFuel={testFuel} setTestFuel={setTestFuel} testFuelValue={stationTestFuelValue} collections={collections} setCollections={setCollections} pumpShiftTimes={pumpShiftTimes} setPumpShiftTimes={setPumpShiftTimes} completePumpShift={completePumpShift} pumpSaving={pumpSaving} pumpSavedAt={pumpSavedAt} />
       <TankDeck mode="closing" tanks={tanks} openingStocks={activeShift.openingTankStocks} values={closingTankStocks} onChange={setClosingTankStocks} />
       <label className="field active-correction-reason"><span>Reason for an opening, employee or rate correction</span><input name="activeCorrectionReason" onChange={(event) => setActiveCorrectionReason(event.target.value)} placeholder="Optional unless correcting the morning sheet" value={activeCorrectionReason} /></label>
