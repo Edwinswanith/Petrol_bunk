@@ -27,6 +27,25 @@ describe("StaffRegister", () => {
     expect(screen.getByLabelText("Kavita assigned shift")).toHaveValue("SHIFT_2");
   });
 
+  it("lets the owner correct a mistyped staff name and phone alongside salary, and saves it", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({ ok: true, json: async () => ({ id: "staff-omapathy", name: "Omapathi" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<StaffRegister staff={staff} attendance={[]} payroll={[]} date="2026-09-02" month="2026-09" />);
+
+    const nameField = screen.getByLabelText("Omapathy name");
+    await user.clear(nameField);
+    await user.type(nameField, "Omapathi");
+    const phoneField = screen.getByLabelText("Omapathy phone");
+    await user.clear(phoneField);
+    await user.type(phoneField, "9876543210");
+    await user.click(screen.getByRole("button", { name: /save omapathy details/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/staff/staff-omapathy", expect.objectContaining({ method: "PATCH" })));
+    const [, request] = fetchMock.mock.calls[0];
+    expect(JSON.parse((request as RequestInit).body as string)).toEqual({ name: "Omapathi", phone: "9876543210", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_1" });
+  });
+
   it("marks a staff member resigned after a reason is entered, without touching other staff", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({ ok: true, json: async () => ({ id: "staff-omapathy", active: false }) }));

@@ -39,7 +39,7 @@ export type PayrollRecord = {
 };
 
 export type AddStaffInput = Pick<StaffRecord, "name" | "phone" | "note" | "monthlySalary" | "dailyBeta" | "assignedShift">;
-export type UpdateStaffInput = Pick<StaffRecord, "monthlySalary"> & Partial<Pick<StaffRecord, "dailyBeta" | "assignedShift">>;
+export type UpdateStaffInput = Pick<StaffRecord, "monthlySalary"> & Partial<Pick<StaffRecord, "name" | "phone" | "dailyBeta" | "assignedShift">>;
 export type SaveAttendanceInput = Pick<AttendanceRecord, "staffId" | "businessDate" | "status" | "note"> &
   Partial<Pick<AttendanceRecord, "checkIn" | "checkOut" | "shiftId">>;
 export type SavePayrollInput = Pick<PayrollRecord, "staffId" | "month" | "halfDays" | "overtime" | "attendanceDeduction" | "advances" | "otherDeductions" | "amountPaid" | "note">;

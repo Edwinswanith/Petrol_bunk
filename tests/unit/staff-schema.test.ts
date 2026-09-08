@@ -46,6 +46,11 @@ describe("staff salary", () => {
     expect(staffSchema.parse({ name: "Edwin", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_2" })).toMatchObject({ monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_2" });
     expect(() => staffUpdateSchema.parse({ monthlySalary: "-1", dailyBeta: "0", assignedShift: "SHIFT_1" })).toThrow();
   });
+
+  it("lets an owner correct a staff member's name and phone alongside salary", () => {
+    expect(staffUpdateSchema.parse({ name: "Omapathi", phone: "9876543210", monthlySalary: "18000", dailyBeta: "150", assignedShift: "SHIFT_1" })).toMatchObject({ name: "Omapathi", phone: "9876543210" });
+    expect(() => staffUpdateSchema.parse({ name: "O", monthlySalary: "18000" })).toThrow();
+  });
 });
 
 describe("staff status changes", () => {

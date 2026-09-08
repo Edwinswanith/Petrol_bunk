@@ -94,7 +94,7 @@ export const staffSchema = z.object({
   assignedShift: z.enum(["SHIFT_1", "SHIFT_2"]).optional().default("SHIFT_1")
 });
 
-export const staffUpdateSchema = z.object({ monthlySalary: decimal, dailyBeta: decimal.optional(), assignedShift: z.enum(["SHIFT_1", "SHIFT_2"]).optional() });
+export const staffUpdateSchema = z.object({ name: z.string().trim().min(2).max(80).optional(), phone: z.string().trim().max(20).optional(), monthlySalary: decimal, dailyBeta: decimal.optional(), assignedShift: z.enum(["SHIFT_1", "SHIFT_2"]).optional() });
 
 export const staffStatusSchema = z.object({ active: z.boolean(), reason: z.string().trim().min(2).max(300) });
 

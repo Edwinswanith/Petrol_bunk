@@ -30,6 +30,9 @@ describe("memory staff store", () => {
     expect(await store.listAttendance("2026-08-31")).toEqual([
       expect.objectContaining({ staffName: "Arun", status: "LATE", checkIn: "06:15", checkOut: "14:10" })
     ]);
+
+    await store.updateStaff(staff.id, { name: "Arun Kumar", phone: "9000011111", monthlySalary: "20000" });
+    expect(await store.listStaff()).toEqual([expect.objectContaining({ name: "Arun Kumar", phone: "9000011111" })]);
   });
 
   it("stores an attendance-aware monthly payroll settlement and balance", async () => {
