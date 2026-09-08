@@ -120,10 +120,12 @@ function createMongoStaffStore(): StaffStore {
       await collection.createIndex({ name: 1 }, { unique: true });
       for (const person of defaultStaff) {
         const now = new Date().toISOString(); const id = `staff-${person.name.toLowerCase()}`;
-        await collection.updateOne({ name: person.name }, { $setOnInsert: { _id: id, id, ...person, active: true, createdAt: now, updatedAt: now } }, { upsert: true });
-        await collection.updateOne({ name: person.name, assignedShift: { $exists: false } }, { $set: { assignedShift: person.assignedShift as StaffShift, updatedAt: now } });
-        await collection.updateOne({ name: person.name, dailyBeta: { $exists: false } }, { $set: { dailyBeta: person.dailyBeta, updatedAt: now } });
-        await collection.updateOne({ name: person.name, $or: [{ monthlySalary: { $exists: false } }, { monthlySalary: "0" }] }, { $set: { monthlySalary: person.monthlySalary, updatedAt: now } });
+        // Matched by _id, not name: the owner can rename a seeded default (e.g. fixing a typo), and this must
+        // stay a no-op for that record afterward rather than racing to insert a second doc under the same _id.
+        await collection.updateOne({ _id: id }, { $setOnInsert: { _id: id, id, ...person, active: true, createdAt: now, updatedAt: now } }, { upsert: true });
+        await collection.updateOne({ _id: id, assignedShift: { $exists: false } }, { $set: { assignedShift: person.assignedShift as StaffShift, updatedAt: now } });
+        await collection.updateOne({ _id: id, dailyBeta: { $exists: false } }, { $set: { dailyBeta: person.dailyBeta, updatedAt: now } });
+        await collection.updateOne({ _id: id, $or: [{ monthlySalary: { $exists: false } }, { monthlySalary: "0" }] }, { $set: { monthlySalary: person.monthlySalary, updatedAt: now } });
       }
       await collection.updateMany({ name: { $in: legacyDefaultNames }, note: "Initial forecourt operator" }, { $set: { active: false, updatedAt: new Date().toISOString() } });
     })();
