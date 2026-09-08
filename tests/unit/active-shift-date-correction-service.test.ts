@@ -35,11 +35,11 @@ describe("applyActiveShiftDateCorrection", () => {
     expect(updated.corrections).toEqual([expect.objectContaining({ reason: "Actually backfilling the 5th", previousBusinessDate: "2026-09-04", revisedBusinessDate: "2026-09-05" })]);
   });
 
-  it("re-stamps every already-completed pump-shift entry with the corrected date, so finance stays consistent", () => {
+  it("leaves already-completed pump-shift entries on the date they were actually recorded under", () => {
     const shift = baseShift({ pumpShiftHistory: [completedEntry] });
     const updated = applyActiveShiftDateCorrection(shift, { businessDate: "2026-09-05" });
 
-    expect(updated.pumpShiftHistory?.[0]).toMatchObject({ id: "entry-1", businessDate: "2026-09-05" });
+    expect(updated.pumpShiftHistory?.[0]).toMatchObject({ id: "entry-1", businessDate: "2026-09-04" });
   });
 
   it("leaves everything untouched and appends no correction when the date is unchanged", () => {

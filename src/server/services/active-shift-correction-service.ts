@@ -48,6 +48,7 @@ export function applyActiveShiftDateCorrection(shift: ShiftRecord, input: Active
     previousProductRates: productRates(shift), revisedProductRates: productRates(shift),
     previousBusinessDate: shift.businessDate, revisedBusinessDate: input.businessDate
   };
-  const pumpShiftHistory = (shift.pumpShiftHistory ?? []).map((entry) => ({ ...entry, businessDate: input.businessDate }));
-  return { ...shift, businessDate: input.businessDate, pumpShiftHistory, corrections: [...(shift.corrections ?? []), correction], version: shift.version + 1 };
+  // Entries already completed keep the date they were actually recorded under — the owner is moving on to a new
+  // day's entries, not relabeling work already logged, so earlier days must not be swept into the new date.
+  return { ...shift, businessDate: input.businessDate, corrections: [...(shift.corrections ?? []), correction], version: shift.version + 1 };
 }
