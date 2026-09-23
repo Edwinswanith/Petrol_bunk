@@ -118,6 +118,26 @@ describe("DailyForecourtSheet", () => {
     ]);
   });
 
+  it("renders the approved two-column employee workspace and aligns an extended handover", async () => {
+    const user = userEvent.setup();
+    const pumpStations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-23" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "edwin", name: "Edwin", monthlySalary: "18000" }, { id: "manoj", name: "Manoj", monthlySalary: "18000" }]} stations={pumpStations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-23", startedAt: "2026-09-23T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(pumpStations.map((item) => [item.stationId, "100"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: pumpStations.map((item, index) => ({ nozzleId: item.stationId, staffId: index % 2 === 0 ? "edwin" : "manoj", staffName: index % 2 === 0 ? "Edwin" : "Manoj" })) }} />);
+
+    expect(screen.getByText("Two employees per pump · Four nozzles")).toBeInTheDocument();
+    const employeeOne = screen.getByLabelText("Pump A employee 1 workspace");
+    const employeeTwo = screen.getByLabelText("Pump A employee 2 workspace");
+    expect(within(employeeOne).getByText("Assigned nozzles (2 selected)")).toBeInTheDocument();
+    expect(within(employeeTwo).getByText("Assigned nozzles (2 selected)")).toBeInTheDocument();
+    expect(within(employeeOne).getByRole("button", { name: "Extend Pump A Employee 1 shift" })).toBeInTheDocument();
+    expect(within(employeeOne).getByRole("button", { name: "Save Pump A Employee 1 entry" })).toBeInTheDocument();
+    expect(screen.getByText(/handover between employees keeps the next shift start aligned/i)).toBeInTheDocument();
+    fireEvent.change(within(employeeOne).getByLabelText("Pump A employee 1 shift start time"), { target: { value: "06:00" } });
+    fireEvent.change(within(employeeOne).getByLabelText("Pump A employee 1 shift end time"), { target: { value: "14:00" } });
+    await user.click(within(employeeOne).getByRole("button", { name: "Extend Pump A Employee 1 shift" }));
+    expect(within(employeeOne).getByLabelText("Pump A employee 1 shift end time")).toHaveValue("16:00");
+    expect(within(employeeTwo).getByLabelText("Pump A employee 2 shift start time")).toHaveValue("16:00");
+  });
+
   it("lists Petrol before Diesel in the Open day control centre rate grid regardless of the products prop order", () => {
     const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }, { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
@@ -586,7 +606,7 @@ describe("DailyForecourtSheet", () => {
       const cashField = screen.getByRole("spinbutton", { name: "Pump A cash collected" });
       await user.clear(cashField); await user.type(cashField, "1000");
 
-      await user.click(screen.getByRole("button", { name: /complete pump a shift/i }));
+      await user.click(screen.getByRole("button", { name: /save pump a employee 1 entry/i }));
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/shift-1/pumps/pump-a", expect.objectContaining({ method: "PATCH" })));
       const [, request] = fetchMock.mock.calls.find(([url]) => url === "/api/shifts/shift-1/pumps/pump-a")!;
@@ -601,7 +621,7 @@ describe("DailyForecourtSheet", () => {
       expect(body.collections).toMatchObject({ cash: "1000" });
       expect(body.nonSaleDispenses).toContainEqual({ nozzleId: "a_n1", volume: "5", returnedToTank: true });
 
-      expect(await screen.findByText(/^completed \d/i)).toBeInTheDocument();
+      expect(await screen.findByText(/^saved \d/i)).toBeInTheDocument();
       expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
       expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(150);
       expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("14:00");
