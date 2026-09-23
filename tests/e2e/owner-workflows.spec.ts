@@ -20,6 +20,44 @@ test("owner screens stay inside common laptop, tablet and mobile viewports", asy
   }
 });
 
+test("Today pump workspace fits narrow desktops and preserves the two-employee handover flow", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Desktop project covers the responsive workflow.");
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1321, height: 800 },
+    { width: 920, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/day");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, `/day overflows at ${viewport.width}px`).toBeLessThanOrEqual(1);
+  }
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/day");
+  await page.getByRole("button", { name: "Add second employee to Pump 1" }).click();
+  await expect(page.getByLabel("Pump 1 employee 1 workspace")).toBeVisible();
+  await expect(page.getByLabel("Pump 1 employee 2 workspace")).toBeVisible();
+  const employeeCards = await page.locator(".pump-workspace").first().locator(".employee-shift-card").evaluateAll((cards) => cards.map((card) => {
+    const rect = card.getBoundingClientRect();
+    return { top: Math.round(rect.top), right: Math.round(rect.right), width: Math.round(rect.width) };
+  }));
+  expect(employeeCards[1].top).toBeGreaterThan(employeeCards[0].top);
+  expect(employeeCards.every((card) => card.right <= 1440 && card.width >= 900)).toBe(true);
+
+  await page.getByLabel("Pump 1 employee 1 shift start time").fill("06:00");
+  await page.getByLabel("Pump 1 employee 1 shift end time").fill("14:00");
+  await page.getByRole("button", { name: "Extend Pump 1 Employee 1 shift" }).click();
+  await expect(page.getByLabel("Pump 1 employee 1 shift end time")).toHaveValue("16:00");
+  await expect(page.getByLabel("Pump 1 employee 2 shift start time")).toHaveValue("16:00");
+
+  const workspaceOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(workspaceOverflow).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Use one employee on Pump 1" }).click();
+  await expect(page.getByRole("button", { name: "Add second employee to Pump 1" })).toBeVisible();
+});
+
 test("Today actions never cover an editable field", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Desktop project covers the laptop viewport.");
   await page.setViewportSize({ width: 1280, height: 800 });
