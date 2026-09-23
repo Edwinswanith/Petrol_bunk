@@ -293,16 +293,22 @@ describe("DailyForecourtSheet", () => {
     await user.type(screen.getByRole("spinbutton", { name: "A-N4 closing totalizer" }), "20");
 
     const petrolTotal = screen.getByLabelText("Pump A petrol total");
+    expect(within(petrolTotal).getByText("Litres sold")).toBeInTheDocument();
+    expect(within(petrolTotal).getByText("Sales turnover")).toBeInTheDocument();
+    expect(within(petrolTotal).getByText("Gross profit")).toBeInTheDocument();
     expect(within(petrolTotal).getByText("150.000 L")).toBeInTheDocument();
     expect(within(petrolTotal).getByText("₹15,375.00")).toBeInTheDocument();
-    expect(within(petrolTotal).getByText("₹855.00 profit")).toBeInTheDocument();
+    expect(within(petrolTotal).getByText("₹855.00")).toBeInTheDocument();
 
     const dieselTotal = screen.getByLabelText("Pump A diesel total");
     expect(within(dieselTotal).getByText("50.000 L")).toBeInTheDocument();
     expect(within(dieselTotal).getByText("₹5,025.00")).toBeInTheDocument();
-    expect(within(dieselTotal).getByText("₹305.00 profit")).toBeInTheDocument();
+    expect(within(dieselTotal).getByText("₹305.00")).toBeInTheDocument();
 
     const pumpTotal = screen.getByLabelText("Pump A total sales");
+    expect(within(pumpTotal).getByText("Total litres sold")).toBeInTheDocument();
+    expect(within(pumpTotal).getByText("Overall turnover")).toBeInTheDocument();
+    expect(within(pumpTotal).getByText("Total gross profit")).toBeInTheDocument();
     expect(within(pumpTotal).getByText("200.000 L")).toBeInTheDocument();
     expect(within(pumpTotal).getByText("₹20,400.00")).toBeInTheDocument();
     expect(within(pumpTotal).getByText("₹1,160.00")).toBeInTheDocument();
@@ -325,12 +331,12 @@ describe("DailyForecourtSheet", () => {
     const petrolTotal = screen.getByLabelText("Pump A petrol total");
     expect(within(petrolTotal).getByText("140.000 L")).toBeInTheDocument();
     expect(within(petrolTotal).getByText("₹14,350.00")).toBeInTheDocument();
-    expect(within(petrolTotal).getByText("₹798.00 profit")).toBeInTheDocument();
+    expect(within(petrolTotal).getByText("₹798.00")).toBeInTheDocument();
 
     const dieselTotal = screen.getByLabelText("Pump A diesel total");
     expect(within(dieselTotal).getByText("45.000 L")).toBeInTheDocument();
     expect(within(dieselTotal).getByText("₹4,522.50")).toBeInTheDocument();
-    expect(within(dieselTotal).getByText("₹274.50 profit")).toBeInTheDocument();
+    expect(within(dieselTotal).getByText("₹274.50")).toBeInTheDocument();
 
     const pumpTotal = screen.getByLabelText("Pump A total sales");
     expect(within(pumpTotal).getByText("185.000 L")).toBeInTheDocument();

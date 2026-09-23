@@ -559,7 +559,21 @@ function PumpClosingDeck({ pumps, staff, allocations, setAllocations, openingRea
         </section>;
       })}</div>
       {pumpAllocations.length === 1 ? <button aria-label={`Add second employee to Pump ${pump.code}`} className="button soft add-pump-employee" disabled={staff.length < 2} onClick={() => setAllocations(addPumpEmployee(allocations, pump))} type="button"><Plus size={14} />Add second employee</button> : null}
-      <div className="fuel-summary">{groups.map((group) => <div aria-label={`Pump ${pump.code} ${group.productId} total`} className={`fuel-summary-item ${group.productId}`} key={group.productId}><span className={`nozzle-badge ${group.productId}`}><Fuel size={14} />{group.productName}</span><strong>{group.litres.toFixed(3)} L</strong><span>{inr(String(group.revenue))}</span><small>{inr(String(group.profit))} profit</small></div>)}<div aria-label={`Pump ${pump.code} total sales`} className="fuel-summary-total"><span><small>Overall litre</small><strong>{pumpTotal.litres.toFixed(3)} L</strong></span><span><small>Overall sales</small><strong>{inr(String(pumpTotal.revenue))}</strong></span><span><small>Profit</small><strong>{inr(String(pumpTotal.profit))}</strong></span></div></div>
+      <div className="fuel-summary">
+        {groups.map((group) => <div aria-label={`Pump ${pump.code} ${group.productId} total`} className={`fuel-summary-item ${group.productId}`} key={group.productId}>
+          <div className="fuel-summary-heading"><span className={`nozzle-badge ${group.productId}`}><Fuel size={15} />{group.productName}</span><small>Today&apos;s fuel performance</small></div>
+          <div className="fuel-summary-metrics">
+            <span><small>Litres sold</small><strong>{group.litres.toFixed(3)} L</strong></span>
+            <span><small>Sales turnover</small><strong>{inr(String(group.revenue))}</strong></span>
+            <span><small>Gross profit</small><strong>{inr(String(group.profit))}</strong></span>
+          </div>
+        </div>)}
+        <div aria-label={`Pump ${pump.code} total sales`} className="fuel-summary-total">
+          <span><small>Total litres sold</small><strong>{pumpTotal.litres.toFixed(3)} L</strong></span>
+          <span><small>Overall turnover</small><strong>{inr(String(pumpTotal.revenue))}</strong></span>
+          <span><small>Total gross profit</small><strong>{inr(String(pumpTotal.profit))}</strong></span>
+        </div>
+      </div>
     </article>;
   })}</section>;
 }
