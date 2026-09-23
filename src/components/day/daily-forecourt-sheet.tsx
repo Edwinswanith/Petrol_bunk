@@ -97,6 +97,13 @@ function dateLabel(value: string) {
   return new Intl.DateTimeFormat("en-IN", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00Z`));
 }
 
+function outletTime(value: string | Date, includeSeconds = false) {
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit",
+    ...(includeSeconds ? { second: "2-digit" } : {})
+  }).format(typeof value === "string" ? new Date(value) : value);
+}
+
 function varianceLabel(value: string | number | undefined) {
   const amount = Number(value ?? 0);
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -141,6 +148,47 @@ function assignmentsFromAllocations(allocations: PumpAllocation[], staff: Staff[
     const staffName = staff.find((person) => person.id === allocation.staffId)?.name ?? "";
     return allocation.nozzleIds.map((nozzleId) => ({ staffId: allocation.staffId, staffName, nozzleId }));
   });
+}
+
+function addPumpEmployee(allocations: PumpAllocation[], pump: Pump) {
+  const current = allocations.filter((allocation) => allocation.pumpId === pump.id);
+  if (current.length >= 2 || !current[0]) return allocations;
+  const sorted = [...pump.stations].sort((a, b) => (a.nozzleNumber ?? 0) - (b.nozzleNumber ?? 0));
+  const firstIds = sorted.filter((_, index) => index % 2 === 0).map((station) => station.stationId);
+  const secondIds = sorted.filter((_, index) => index % 2 === 1).map((station) => station.stationId);
+  return allocations
+    .map((allocation) => allocation.id === current[0].id ? { ...allocation, nozzleIds: firstIds } : allocation)
+    .concat({ id: `${pump.id}:employee-2`, pumpId: pump.id, staffId: "", nozzleIds: secondIds });
+}
+
+function removePumpEmployee(allocations: PumpAllocation[], pump: Pump) {
+  const first = allocations.find((allocation) => allocation.pumpId === pump.id);
+  return allocations
+    .filter((allocation) => allocation.pumpId !== pump.id || allocation.id === first?.id)
+    .map((allocation) => allocation.id === first?.id ? { ...allocation, nozzleIds: pump.stations.map((station) => station.stationId) } : allocation);
+}
+
+function movePumpNozzle(allocations: PumpAllocation[], pump: Pump, target: PumpAllocation, nozzleId: string) {
+  const pumpAllocations = allocations.filter((allocation) => allocation.pumpId === pump.id);
+  if (pumpAllocations.length !== 2) return allocations;
+  const targetOwnsNozzle = target.nozzleIds.includes(nozzleId);
+  return allocations.map((allocation) => {
+    if (allocation.pumpId !== pump.id) return allocation;
+    if (allocation.id === target.id) return { ...allocation, nozzleIds: targetOwnsNozzle ? allocation.nozzleIds.filter((id) => id !== nozzleId) : [...allocation.nozzleIds, nozzleId] };
+    return { ...allocation, nozzleIds: targetOwnsNozzle ? [...allocation.nozzleIds, nozzleId] : allocation.nozzleIds.filter((id) => id !== nozzleId) };
+  });
+}
+
+function validatePumpAllocations(pumps: Pump[], allocations: PumpAllocation[], requireEveryEmployee: boolean) {
+  for (const pump of pumps) {
+    const pumpAllocations = allocations.filter((allocation) => allocation.pumpId === pump.id);
+    const assigned = pumpAllocations.flatMap((allocation) => allocation.nozzleIds);
+    if ((requireEveryEmployee || pumpAllocations.length === 2) && pumpAllocations.some((allocation) => !allocation.staffId)) throw new Error(`Select every employee for Pump ${pump.code}.`);
+    const selectedStaff = pumpAllocations.map((allocation) => allocation.staffId).filter(Boolean);
+    if (new Set(selectedStaff).size !== selectedStaff.length) throw new Error(`Select different employees for Pump ${pump.code}.`);
+    if (assigned.length !== pump.stations.length || new Set(assigned).size !== assigned.length) throw new Error(`Assign every nozzle on Pump ${pump.code} once.`);
+    if (pumpAllocations.length === 2 && pumpAllocations.some((allocation) => allocation.nozzleIds.length !== 2)) throw new Error(`Each employee on Pump ${pump.code} must have two nozzles.`);
+  }
 }
 
 function shiftDuration(start: string, end: string) {
@@ -243,14 +291,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   async function openDay(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      for (const pump of pumps) {
-        const pumpAllocations = allocations.filter((allocation) => allocation.pumpId === pump.id);
-        const assigned = pumpAllocations.flatMap((allocation) => allocation.nozzleIds);
-        if (pumpAllocations.some((allocation) => !allocation.staffId)) throw new Error(`Select every employee for Pump ${pump.code}.`);
-        if (new Set(pumpAllocations.map((allocation) => allocation.staffId)).size !== pumpAllocations.length) throw new Error(`Select different employees for Pump ${pump.code}.`);
-        if (assigned.length !== pump.stations.length || new Set(assigned).size !== assigned.length) throw new Error(`Assign every nozzle on Pump ${pump.code} once.`);
-        if (pumpAllocations.length === 2 && pumpAllocations.some((allocation) => allocation.nozzleIds.length !== 2)) throw new Error(`Each employee on Pump ${pump.code} must have two nozzles.`);
-      }
+      validatePumpAllocations(pumps, allocations, true);
       await Promise.all(products.map(async (product) => {
         const sellingPrice = rates[product.id].selling;
         const response = await fetch(`/api/products/${product.id}`, {
@@ -306,6 +347,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 
   async function persistActiveSetup() {
     if (!activeShift) return;
+    validatePumpAllocations(pumps, allocations, false);
     await Promise.all(products.map(async (product) => {
       const sellingPrice = rates[product.id].selling;
       const response = await fetch(`/api/products/${product.id}`, {
@@ -440,7 +482,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   return <div className="daily-sheet">
     <section className="day-command panel">
       <div><p className="eyebrow">{businessDate} · Owner entry</p><h1>Today&apos;s forecourt sheet</h1><p>One page for staff, eight totalizers, collections and tank reconciliation.</p></div>
-      <div className="day-status"><span className={`status-pill ${activeShift ? "warning" : "healthy"}`}>{closedRecord ? "CLOSED" : activeShift ? "OPEN" : "READY"}</span><small>{activeShift ? `Started ${new Date(activeShift.startedAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}` : "Confirm the morning position"}</small></div>
+      <div className="day-status"><span className={`status-pill ${activeShift ? "warning" : "healthy"}`}>{closedRecord ? "CLOSED" : activeShift ? "OPEN" : "READY"}</span><small>{activeShift ? `Started ${outletTime(activeShift.startedAt)}` : "Confirm the morning position"}</small></div>
     </section>
 
     {closedRecord ? <section className="closed-day-summary"><CheckCircle2 size={26} /><div><strong>Business day closed and inventory updated</strong><p>{inr(closedRecord.reconciliation.sales.expectedSales)} sales · {closedRecord.reconciliation.products?.reduce((sum, item) => sum + Number(item.litresSold), 0).toFixed(3)} L · {inr(closedRecord.reconciliation.sales.tenderVariance)} tender variance</p><div className="form-actions">{nextMissingDay ? <Link className="button primary" href="/day">Continue with {nextMissingDay}<ArrowRight size={15} /></Link> : null}<Link className={nextMissingDay ? "button" : "button primary"} href={`/shifts/${closedRecord.id}`}>Open permanent day record</Link><Link className="button" href={`/finance?month=${businessDate.slice(0, 7)}`}>View finance</Link><Link className="button" href="/reports">View reports</Link></div></div></section> : null}
@@ -469,32 +511,6 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 }
 
 function PumpDeck({ pumps, staff, allocations, setAllocations, openingReadings, setOpeningReadings, previousReadingSources }: { pumps: Pump[]; staff: Staff[]; allocations: PumpAllocation[]; setAllocations: (value: PumpAllocation[]) => void; openingReadings: Record<string, string>; setOpeningReadings: (value: Record<string, string>) => void; previousReadingSources: Record<string, { shiftId: string; businessDate: string }> }) {
-  function addEmployee(pump: Pump) {
-    const current = allocations.filter((allocation) => allocation.pumpId === pump.id);
-    if (current.length >= 2) return;
-    const first = current[0];
-    const sorted = [...pump.stations].sort((a, b) => (a.nozzleNumber ?? 0) - (b.nozzleNumber ?? 0));
-    const firstIds = sorted.filter((_, index) => index % 2 === 0).map((station) => station.stationId);
-    const secondIds = sorted.filter((_, index) => index % 2 === 1).map((station) => station.stationId);
-    setAllocations(allocations.map((allocation) => allocation.id === first.id ? { ...allocation, nozzleIds: firstIds } : allocation).concat({ id: `${pump.id}:employee-2`, pumpId: pump.id, staffId: "", nozzleIds: secondIds }));
-  }
-
-  function removeSecondEmployee(pump: Pump) {
-    const first = allocations.find((allocation) => allocation.pumpId === pump.id);
-    setAllocations(allocations.filter((allocation) => allocation.pumpId !== pump.id || allocation.id === first?.id).map((allocation) => allocation.id === first?.id ? { ...allocation, nozzleIds: pump.stations.map((station) => station.stationId) } : allocation));
-  }
-
-  function moveNozzle(pump: Pump, target: PumpAllocation, nozzleId: string) {
-    const pumpAllocations = allocations.filter((allocation) => allocation.pumpId === pump.id);
-    if (pumpAllocations.length !== 2) return;
-    const targetOwnsNozzle = target.nozzleIds.includes(nozzleId);
-    setAllocations(allocations.map((allocation) => {
-      if (allocation.pumpId !== pump.id) return allocation;
-      if (allocation.id === target.id) return { ...allocation, nozzleIds: targetOwnsNozzle ? allocation.nozzleIds.filter((id) => id !== nozzleId) : [...allocation.nozzleIds, nozzleId] };
-      return { ...allocation, nozzleIds: targetOwnsNozzle ? [...allocation.nozzleIds, nozzleId] : allocation.nozzleIds.filter((id) => id !== nozzleId) };
-    }));
-  }
-
   return <>
     <div className="section-step"><span>2</span><div><small>Staff &amp; meter setup</small><strong>Assign one or two employees and confirm opening totalizers</strong></div></div>
     <p className="nozzle-map-note">Each pump has four fixed nozzles. One employee may handle all four, or two employees may handle two nozzles each.</p>
@@ -503,12 +519,12 @@ function PumpDeck({ pumps, staff, allocations, setAllocations, openingReadings, 
       return <article className="pump-card" key={pump.id}>
         <header><span className="pump-emblem"><Fuel size={20} /></span><span><small>Opening setup</small><strong>Pump {pump.code}</strong></span><Gauge size={22} /></header>
         <div className="employee-allocation-grid">{pumpAllocations.map((allocation, index) => <section className="employee-allocation" key={allocation.id}>
-          <div className="employee-allocation-heading"><strong>Employee {index + 1}</strong>{index === 1 ? <button className="text-button" onClick={() => removeSecondEmployee(pump)} type="button">Use one employee</button> : null}</div>
+          <div className="employee-allocation-heading"><strong>Employee {index + 1}</strong>{index === 1 ? <button className="text-button" onClick={() => setAllocations(removePumpEmployee(allocations, pump))} type="button">Use one employee</button> : null}</div>
           <label><span>Employee on these nozzles</span><select aria-label={index === 0 ? `Pump ${pump.code} operator` : `Pump ${pump.code} employee ${index + 1}`} name={`staff-${allocation.id}`} onChange={(event) => setAllocations(allocations.map((item) => item.id === allocation.id ? { ...item, staffId: event.target.value } : item))} required value={allocation.staffId}><option value="">Select employee</option>{staff.map((person) => <option key={person.id} value={person.id}>{staffOption(person)}</option>)}</select></label>
-          <div className="nozzle-allocation-chips">{pump.stations.map((station) => <button aria-pressed={allocation.nozzleIds.includes(station.stationId)} className={`nozzle-allocation-chip ${station.productId} ${allocation.nozzleIds.includes(station.stationId) ? "selected" : ""}`} key={station.stationId} onClick={() => moveNozzle(pump, allocation, station.stationId)} type="button">{allocatedNozzleLabel(station)}</button>)}</div>
+          <div className="nozzle-allocation-chips">{pump.stations.map((station) => <button aria-pressed={allocation.nozzleIds.includes(station.stationId)} className={`nozzle-allocation-chip ${station.productId} ${allocation.nozzleIds.includes(station.stationId) ? "selected" : ""}`} key={station.stationId} onClick={() => setAllocations(movePumpNozzle(allocations, pump, allocation, station.stationId))} type="button">{allocatedNozzleLabel(station)}</button>)}</div>
           <small>{allocation.nozzleIds.length} of {pumpAllocations.length === 2 ? 2 : 4} nozzles assigned</small>
         </section>)}</div>
-        {pumpAllocations.length === 1 ? <button className="button soft add-pump-employee" disabled={staff.length < 2} onClick={() => addEmployee(pump)} type="button"><Plus size={14} />Add second employee</button> : null}
+        {pumpAllocations.length === 1 ? <button className="button soft add-pump-employee" disabled={staff.length < 2} onClick={() => setAllocations(addPumpEmployee(allocations, pump))} type="button"><Plus size={14} />Add second employee</button> : null}
         <div className="nozzle-list">{pump.stations.map((station) => <div className="nozzle-entry opening-row" key={station.stationId}><span className={`nozzle-badge ${station.productId}`}><Fuel size={14} />{allocatedNozzleLabel(station)}</span><label className="totalizer-field"><span><PencilLine size={13} />Opening totalizer</span><span className="totalizer-control"><input aria-label={`${station.code} opening totalizer`} value={openingReadings[station.stationId] ?? ""} onChange={(event) => setOpeningReadings({ ...openingReadings, [station.stationId]: event.target.value })} min="0" name={`opening-${station.stationId}`} placeholder="Enter reading" required step="0.001" type="number" /><em>L</em></span><small>{previousReadingSources[station.stationId] ? `From ${previousReadingSources[station.stationId].businessDate} closing` : "First opening — enter manually"}</small></label></div>)}</div>
       </article>;
     })}</section>
@@ -531,8 +547,9 @@ function PumpClosingDeck({ pumps, staff, allocations, setAllocations, openingRea
         const label = pumpAllocations.length === 1 ? `Pump ${pump.code}` : `Pump ${pump.code} employee ${index + 1}`;
         const minutes = shiftDuration(pumpShiftTimes[allocation.id]?.start ?? "", pumpShiftTimes[allocation.id]?.end ?? "");
         return <section className="pump-side employee-shift-card" key={allocation.id}>
+          {index === 1 ? <div className="employee-allocation-heading"><strong>Nozzle allocation</strong><button className="text-button" onClick={() => setAllocations(removePumpEmployee(allocations, pump))} type="button">Use one employee</button></div> : null}
           <div className="side-owner"><label className="pump-operator-field"><span>Employee {index + 1}</span><select aria-label={pumpAllocations.length === 1 ? `Pump ${pump.code} active operator` : `${label} active operator`} onChange={(event) => setAllocations(allocations.map((item) => item.id === allocation.id ? { ...item, staffId: event.target.value } : item))} required value={allocation.staffId}><option value="">Select</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><span className="side-live"><strong>{assignedStations.reduce((sum, station) => sum + litres(station), 0).toFixed(3)} L</strong><small>{inr(String(expected))} expected</small></span></div>
-          <div className="assigned-nozzles">{assignedStations.map((station) => <span className={`nozzle-allocation-chip selected ${station.productId}`} key={station.stationId}>{allocatedNozzleLabel(station)}</span>)}</div>
+          <div className="assigned-nozzles">{pump.stations.map((station) => <button aria-label={`${label} ${allocatedNozzleLabel(station)}`} aria-pressed={allocation.nozzleIds.includes(station.stationId)} className={`nozzle-allocation-chip ${station.productId} ${allocation.nozzleIds.includes(station.stationId) ? "selected" : ""}`} disabled={pumpAllocations.length !== 2} key={station.stationId} onClick={() => setAllocations(movePumpNozzle(allocations, pump, allocation, station.stationId))} type="button">{allocatedNozzleLabel(station)}</button>)}</div>
           <div className="nozzle-list compact-nozzle-list">{assignedStations.map((station) => {
             const opening = openingReadings[station.stationId] ?? "";
             return <div className="nozzle-ledger-row" key={station.stationId}><div className="ledger-nozzle"><span className={`nozzle-badge ${station.productId}`}><Fuel size={14} />{allocatedNozzleLabel(station)}</span></div><label><span>Opening</span><span className="input-wrap"><input aria-label={`${station.code} editable opening totalizer`} min="0" onChange={(event) => { const next = event.target.value; const wasUnchanged = closingReadings[station.stationId] === opening; setOpeningReadings({ ...openingReadings, [station.stationId]: next }); if (wasUnchanged) setClosingReadings({ ...closingReadings, [station.stationId]: next }); }} required step="0.001" type="number" value={opening} /><span className="unit">L</span></span></label><label><span>Closing</span><span className="input-wrap"><input aria-label={`${station.code} closing totalizer`} min={opening || "0"} name={`closing-${station.stationId}`} onChange={(event) => setClosingReadings({ ...closingReadings, [station.stationId]: event.target.value })} required step="0.001" type="number" value={closingReadings[station.stationId] ?? ""} /><span className="unit">L</span></span></label><label className="test-fuel-field"><span>Test fuel</span><span className="input-wrap"><input aria-label={`${station.code} test fuel`} min="0" name={`test-${station.stationId}`} onChange={(event) => setTestFuel({ ...testFuel, [station.stationId]: event.target.value })} step="0.001" type="number" value={testFuel[station.stationId] ?? "0"} /><span className="unit">L</span></span></label><div className="ledger-result"><strong>{litres(station).toFixed(3)} L</strong><span>{inr(String(revenue(station)))}</span><small>{inr(String(profit(station)))} profit</small></div></div>;
@@ -541,6 +558,7 @@ function PumpClosingDeck({ pumps, staff, allocations, setAllocations, openingRea
           <div className="pump-save-row"><label><span>Shift start</span><input aria-label={`${label} shift start time`} onChange={(event) => setPumpShiftTimes({ ...pumpShiftTimes, [allocation.id]: { start: event.target.value, end: pumpShiftTimes[allocation.id]?.end ?? "" } })} type="time" value={pumpShiftTimes[allocation.id]?.start ?? ""} /></label><label><span>Actual end</span><input aria-label={`${label} shift end time`} onChange={(event) => setPumpShiftTimes({ ...pumpShiftTimes, [allocation.id]: { start: pumpShiftTimes[allocation.id]?.start ?? "", end: event.target.value } })} type="time" value={pumpShiftTimes[allocation.id]?.end ?? ""} /></label>{minutes > 480 ? <span className="overtime-chip">+{Math.floor((minutes - 480) / 60)}h {(minutes - 480) % 60}m overtime</span> : null}<button className="button soft" disabled={pumpSaving[allocation.id]} onClick={() => completePumpShift(pump, allocation)} type="button"><CheckCircle2 size={14} />{pumpSaving[allocation.id] ? "Completing…" : pumpAllocations.length === 1 ? `Complete Pump ${pump.code} shift` : `Complete employee ${index + 1} shift`}</button>{pumpSavedAt[allocation.id] ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Completed {pumpSavedAt[allocation.id].toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}</span> : null}</div>
         </section>;
       })}</div>
+      {pumpAllocations.length === 1 ? <button aria-label={`Add second employee to Pump ${pump.code}`} className="button soft add-pump-employee" disabled={staff.length < 2} onClick={() => setAllocations(addPumpEmployee(allocations, pump))} type="button"><Plus size={14} />Add second employee</button> : null}
       <div className="fuel-summary">{groups.map((group) => <div aria-label={`Pump ${pump.code} ${group.productId} total`} className={`fuel-summary-item ${group.productId}`} key={group.productId}><span className={`nozzle-badge ${group.productId}`}><Fuel size={14} />{group.productName}</span><strong>{group.litres.toFixed(3)} L</strong><span>{inr(String(group.revenue))}</span><small>{inr(String(group.profit))} profit</small></div>)}<div aria-label={`Pump ${pump.code} total sales`} className="fuel-summary-total"><span><small>Overall litre</small><strong>{pumpTotal.litres.toFixed(3)} L</strong></span><span><small>Overall sales</small><strong>{inr(String(pumpTotal.revenue))}</strong></span><span><small>Profit</small><strong>{inr(String(pumpTotal.profit))}</strong></span></div></div>
     </article>;
   })}</section>;

@@ -96,6 +96,28 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByText("monthly payroll")).toBeInTheDocument();
   });
 
+  it("lets an already-open pump add a second employee and save the two nozzle pairs", async () => {
+    const user = userEvent.setup();
+    const pumpStations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({ ok: true, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-23" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "edwin", name: "Edwin", monthlySalary: "18000" }, { id: "manoj", name: "Manoj", monthlySalary: "18000" }]} stations={pumpStations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-23", startedAt: "2026-09-23T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(pumpStations.map((item) => [item.stationId, "100"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: pumpStations.map((item) => ({ nozzleId: item.stationId, staffId: "edwin", staffName: "Edwin" })) }} />);
+
+    await user.click(screen.getByRole("button", { name: /add second employee to pump a/i }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pump A employee 2 active operator" }), "manoj");
+    await user.click(screen.getByRole("button", { name: /save setup changes/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open", expect.objectContaining({ method: "PATCH" })));
+    const [, request] = fetchMock.mock.calls.find(([url]) => url === "/api/shifts/open")!;
+    const body = JSON.parse((request as RequestInit).body as string);
+    expect(body.staffAssignments).toEqual([
+      { staffId: "edwin", staffName: "Edwin", nozzleId: "a_n1" },
+      { staffId: "edwin", staffName: "Edwin", nozzleId: "a_n3" },
+      { staffId: "manoj", staffName: "Manoj", nozzleId: "a_n2" },
+      { staffId: "manoj", staffName: "Manoj", nozzleId: "a_n4" }
+    ]);
+  });
+
   it("lists Petrol before Diesel in the Open day control centre rate grid regardless of the products prop order", () => {
     const stations = (["A", "B"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => station(pump, nozzle)));
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={{}} products={[{ id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }, { id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
