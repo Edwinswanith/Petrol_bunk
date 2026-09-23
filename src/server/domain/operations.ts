@@ -82,6 +82,7 @@ export type ActiveShiftDateCorrectionInput = {
 export type PumpShiftCompletionInput = {
   staffId: string;
   staffName: string;
+  nozzleIds?: string[];
   shiftStartTime?: string;
   shiftEndTime?: string;
   closingNozzleReadings: Record<string, string>;
@@ -95,6 +96,7 @@ export type PumpShiftRecord = {
   pumpLabel: string;
   staffId: string;
   staffName: string;
+  nozzleIds?: string[];
   businessDate: string;
   shiftStartTime?: string;
   shiftEndTime?: string;

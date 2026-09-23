@@ -30,14 +30,16 @@ function recomputeEntry(
 
 export function applyPumpShiftEntryCorrection(shift: ShiftRecord, pumpId: string, entryId: string, input: PumpShiftCorrectionInput, now = new Date().toISOString()): ShiftRecord {
   if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
-  const stations = (shift.stationSnapshots ?? []).filter((station) => pumpGroupId(station, station.stationId) === pumpId);
-  if (!stations.length) throw new Error(`Unknown pump: ${pumpId}`);
-  const stationIds = new Set(stations.map((station) => station.stationId));
+  const pumpStations = (shift.stationSnapshots ?? []).filter((station) => pumpGroupId(station, station.stationId) === pumpId);
+  if (!pumpStations.length) throw new Error(`Unknown pump: ${pumpId}`);
 
   const history = shift.pumpShiftHistory ?? [];
   const targetIndex = history.findIndex((entry) => entry.id === entryId && entry.pumpId === pumpId);
   if (targetIndex === -1) throw new Error("Pump shift record not found");
   const target = history[targetIndex];
+  const targetIds = new Set(target.nozzleIds ?? Object.keys(target.closingNozzleReadings));
+  const stations = pumpStations.filter((station) => targetIds.has(station.stationId));
+  const stationIds = new Set(stations.map((station) => station.stationId));
 
   for (const stationId of stationIds) {
     if (input.closingNozzleReadings[stationId] === undefined) throw new Error(`Missing closing reading for ${stationId}`);
@@ -77,16 +79,18 @@ export function applyPumpShiftEntryCorrection(shift: ShiftRecord, pumpId: string
   const nextHistory = [...history];
   nextHistory[targetIndex] = finalTarget;
 
-  let previousClosing = finalTarget.closingNozzleReadings;
+  const latestClosing = { ...finalTarget.closingNozzleReadings };
   for (const index of laterIndices) {
     const entry = nextHistory[index];
-    const newOpening = Object.fromEntries(stations.map((station) => [station.stationId, previousClosing[station.stationId] ?? entry.openingNozzleReadings[station.stationId]]));
+    const entryIds = new Set(entry.nozzleIds ?? Object.keys(entry.closingNozzleReadings));
+    const entryStations = pumpStations.filter((station) => entryIds.has(station.stationId));
+    const newOpening = Object.fromEntries(entryStations.map((station) => [station.stationId, latestClosing[station.stationId] ?? entry.openingNozzleReadings[station.stationId]]));
     const openingChanged = JSON.stringify(entry.openingNozzleReadings) !== JSON.stringify(newOpening);
-    if (!openingChanged) { previousClosing = entry.closingNozzleReadings; continue; }
+    if (!openingChanged) { Object.assign(latestClosing, entry.closingNozzleReadings); continue; }
 
     let recomputed: PumpShiftRecord;
     try {
-      recomputed = recomputeEntry(entry, stations, newOpening, entry.closingNozzleReadings, entry.nonSaleDispenses, entry.collections, entry.staffId, entry.staffName, entry.shiftStartTime, entry.shiftEndTime);
+      recomputed = recomputeEntry(entry, entryStations, newOpening, entry.closingNozzleReadings, entry.nonSaleDispenses, entry.collections, entry.staffId, entry.staffName, entry.shiftStartTime, entry.shiftEndTime);
     } catch (error) {
       if (error instanceof CalculationError) {
         throw new CalculationError(`Correcting this segment would make ${entry.staffName}'s later shift (${entry.shiftStartTime ?? "unlabelled"}–${entry.shiftEndTime ?? "unlabelled"}) invalid: ${error.message}`);
@@ -94,7 +98,7 @@ export function applyPumpShiftEntryCorrection(shift: ShiftRecord, pumpId: string
       throw error;
     }
     nextHistory[index] = { ...recomputed, cascadeAdjustment: { fromEntryId: entryId, adjustedAt: now } };
-    previousClosing = recomputed.closingNozzleReadings;
+    Object.assign(latestClosing, recomputed.closingNozzleReadings);
   }
 
   return { ...shift, pumpShiftHistory: nextHistory, version: shift.version + 1 };

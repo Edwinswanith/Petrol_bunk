@@ -50,4 +50,48 @@ describe("applyPumpShiftCompletion", () => {
 
     expect(result.pumpShiftHistory?.[1]).toMatchObject({ businessDate: "2026-08-31", openingNozzleReadings: { a_n1: "100", a_n2: "50" } });
   });
+
+  it("records two employees on separate nozzle pairs and carries each pair forward independently", () => {
+    const fourStations: StationSnapshot[] = [
+      pumpAStations[0], pumpAStations[1],
+      { ...pumpAStations[0], stationId: "a_n3", code: "A-N3", name: "Nozzle 3" },
+      { ...pumpAStations[1], stationId: "a_n4", code: "A-N4", name: "Nozzle 4" }
+    ];
+    const shift = staleShift({
+      stationSnapshots: fourStations,
+      openingNozzleReadings: { a_n1: "10", a_n2: "20", a_n3: "30", a_n4: "40" }
+    });
+
+    const afterEdwin = applyPumpShiftCompletion(shift, "pump-a", {
+      staffId: "staff-edwin", staffName: "Edwin", nozzleIds: ["a_n1", "a_n3"],
+      closingNozzleReadings: { a_n1: "110", a_n3: "130" }, nonSaleDispenses: []
+    });
+    const afterManoj = applyPumpShiftCompletion(afterEdwin, "pump-a", {
+      staffId: "staff-manoj", staffName: "Manoj", nozzleIds: ["a_n2", "a_n4"],
+      closingNozzleReadings: { a_n2: "220", a_n4: "240" }, nonSaleDispenses: []
+    });
+    const nextEdwin = applyPumpShiftCompletion(afterManoj, "pump-a", {
+      staffId: "staff-edwin", staffName: "Edwin", nozzleIds: ["a_n1", "a_n3"],
+      closingNozzleReadings: { a_n1: "150", a_n3: "170" }, nonSaleDispenses: []
+    });
+
+    expect(afterManoj.pumpShiftHistory).toHaveLength(2);
+    expect(afterManoj.pumpShiftHistory?.[0]).toMatchObject({ staffName: "Edwin", nozzleIds: ["a_n1", "a_n3"] });
+    expect(afterManoj.pumpShiftHistory?.[1]).toMatchObject({ staffName: "Manoj", nozzleIds: ["a_n2", "a_n4"], openingNozzleReadings: { a_n2: "20", a_n4: "40" } });
+    expect(nextEdwin.pumpShiftHistory?.[2].openingNozzleReadings).toEqual({ a_n1: "110", a_n3: "130" });
+  });
+
+  it("rejects assigning fewer than two nozzles on a four-nozzle pump", () => {
+    const fourStations: StationSnapshot[] = [
+      pumpAStations[0], pumpAStations[1],
+      { ...pumpAStations[0], stationId: "a_n3", code: "A-N3" },
+      { ...pumpAStations[1], stationId: "a_n4", code: "A-N4" }
+    ];
+    const shift = staleShift({ stationSnapshots: fourStations, openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" } });
+
+    expect(() => applyPumpShiftCompletion(shift, "pump-a", {
+      staffId: "staff-edwin", staffName: "Edwin", nozzleIds: ["a_n1"],
+      closingNozzleReadings: { a_n1: "10" }, nonSaleDispenses: []
+    })).toThrow("between two and four nozzles");
+  });
 });

@@ -4,14 +4,22 @@ import { pumpGroupId, pumpGroupLabel } from "@/server/domain/pump-grouping";
 
 export function applyPumpShiftCompletion(shift: ShiftRecord, pumpId: string, input: PumpShiftCompletionInput, now = new Date().toISOString()): ShiftRecord {
   if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
-  const stations = (shift.stationSnapshots ?? []).filter((station) => pumpGroupId(station, station.stationId) === pumpId);
-  if (!stations.length) throw new Error(`Unknown pump: ${pumpId}`);
+  const pumpStations = (shift.stationSnapshots ?? []).filter((station) => pumpGroupId(station, station.stationId) === pumpId);
+  if (!pumpStations.length) throw new Error(`Unknown pump: ${pumpId}`);
+  const requestedIds = input.nozzleIds ?? pumpStations.map((station) => station.stationId);
+  if (new Set(requestedIds).size !== requestedIds.length) throw new Error("A nozzle can only be assigned once per employee period");
+  if (pumpStations.length >= 4 && (requestedIds.length < 2 || requestedIds.length > 4)) throw new Error("Each employee must be assigned between two and four nozzles");
+  const requested = new Set(requestedIds);
+  const stations = pumpStations.filter((station) => requested.has(station.stationId));
+  if (stations.length !== requested.size) throw new Error(`Unknown nozzle assignment for pump ${pumpId}`);
 
   const stationIds = new Set(stations.map((station) => station.stationId));
   const previousEntries = (shift.pumpShiftHistory ?? []).filter((entry) => entry.pumpId === pumpId);
-  const lastEntry = previousEntries[previousEntries.length - 1];
   const openingNozzleReadings = Object.fromEntries(
-    stations.map((station) => [station.stationId, lastEntry?.closingNozzleReadings[station.stationId] ?? shift.openingNozzleReadings[station.stationId]])
+    stations.map((station) => {
+      const previous = [...previousEntries].reverse().find((entry) => entry.closingNozzleReadings[station.stationId] !== undefined);
+      return [station.stationId, previous?.closingNozzleReadings[station.stationId] ?? shift.openingNozzleReadings[station.stationId]];
+    })
   );
 
   for (const stationId of stationIds) {
@@ -26,7 +34,7 @@ export function applyPumpShiftCompletion(shift: ShiftRecord, pumpId: string, inp
 
   const record: PumpShiftRecord = {
     id: crypto.randomUUID(), pumpId, pumpLabel: pumpGroupLabel(stations[0], pumpId),
-    staffId: input.staffId, staffName: input.staffName, businessDate: shift.businessDate,
+    staffId: input.staffId, staffName: input.staffName, nozzleIds: stations.map((station) => station.stationId), businessDate: shift.businessDate,
     shiftStartTime: input.shiftStartTime, shiftEndTime: input.shiftEndTime,
     openingNozzleReadings, closingNozzleReadings: input.closingNozzleReadings, nonSaleDispenses,
     collections: { cash: summary.cash, upi: summary.upi, card: summary.card, credit: summary.credit, other: summary.other, declaredCashHandover: summary.declaredCashHandover },

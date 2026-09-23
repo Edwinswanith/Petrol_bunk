@@ -112,6 +112,33 @@ describe("prepareCloseInput", () => {
     expect(prepared.staffHandovers).toEqual({ "staff-edwin": "975" });
   });
 
+  it("preserves each employee's entered collection when two employees share one physical pump", async () => {
+    vi.mocked(listExpenses).mockResolvedValue([]);
+    vi.mocked(listFuelReceipts).mockResolvedValue([]);
+    const nozzle = (id: string) => ({
+      stationId: id, code: id.toUpperCase(), name: id, productId: "petrol", productName: "Petrol",
+      tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95",
+      dispenserId: "pump-a", dispenserCode: "1"
+    });
+    const pumpShift: ShiftRecord = {
+      ...shift,
+      staffAssignments: [
+        { staffId: "staff-edwin", staffName: "Edwin", nozzleId: "a_n1" },
+        { staffId: "staff-manoj", staffName: "Manoj", nozzleId: "a_n2" }
+      ],
+      stationSnapshots: [nozzle("a_n1"), nozzle("a_n2")]
+    };
+
+    const prepared = await prepareCloseInput(pumpShift, {
+      ...closeInput,
+      staffHandovers: { "staff-edwin": "600", "staff-manoj": "400" },
+      sideCollections: { "pump-a": { cash: "700", upi: "300", card: "0", credit: "0", other: "0", declaredCashHandover: "700" } }
+    });
+
+    expect(prepared.payments).toEqual(expect.objectContaining({ cashSales: "700", upi: "300" }));
+    expect(prepared.staffHandovers).toEqual({ "staff-edwin": "600", "staff-manoj": "400" });
+  });
+
   it("sums a pump's completed shift history together with the currently live segment when closing the day", async () => {
     vi.mocked(listExpenses).mockResolvedValue([]);
     vi.mocked(listFuelReceipts).mockResolvedValue([]);

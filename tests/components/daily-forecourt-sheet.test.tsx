@@ -48,9 +48,8 @@ describe("DailyForecourtSheet", () => {
     expect(screen.getByRole("combobox", { name: "Pump A operator" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Pump B operator" })).toBeInTheDocument();
     expect(screen.queryAllByRole("combobox", { name: /fuel grade/i })).toHaveLength(0);
-    expect(screen.getByText(/Permanent fuel map: every pump runs two petrol and two diesel nozzles, worked by one employee/i)).toBeInTheDocument();
-    expect([...document.querySelectorAll(".nozzle-badge")].map((badge) => badge.textContent)).toEqual(["Petrol", "Petrol", "Diesel", "Diesel", "Petrol", "Petrol", "Diesel", "Diesel"]);
-    for (const legacy of ["N1", "N2", "N3", "N4"]) expect(screen.queryByText(legacy)).not.toBeInTheDocument();
+    expect(screen.getByText(/One employee may handle all four, or two employees may handle two nozzles each/i)).toBeInTheDocument();
+    expect([...document.querySelectorAll(".nozzle-badge")].map((badge) => badge.textContent)).toEqual(["Petrol N1", "Petrol N2", "Diesel N3", "Diesel N4", "Petrol N1", "Petrol N2", "Diesel N3", "Diesel N4"]);
     expect(screen.getAllByRole("spinbutton", { name: /opening totalizer/i })).toHaveLength(8);
     const nozzleOne = screen.getByRole("spinbutton", { name: "A-N1 opening totalizer" });
     const nozzleTwo = screen.getByRole("spinbutton", { name: "A-N2 opening totalizer" });
@@ -58,6 +57,30 @@ describe("DailyForecourtSheet", () => {
     await user.clear(nozzleOne); await user.type(nozzleOne, "1015.250");
     expect(nozzleOne).toHaveValue(1015.25); expect(nozzleTwo).toHaveValue(2000);
     expect(screen.getByRole("button", { name: /start business day/i })).toBeEnabled();
+  });
+
+  it("splits one pump between two employees and submits each employee's selected nozzle pair", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; json: () => Promise<unknown> }>>(async () => ({ ok: true, json: async () => ({ id: "shift-1" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("crypto", { randomUUID: () => "request-1" });
+    const pumpStations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-01" previousReadings={Object.fromEntries(pumpStations.map((item) => [item.stationId, "100"]))} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "edwin", name: "Edwin", monthlySalary: "18000" }, { id: "manoj", name: "Manoj", monthlySalary: "18000" }]} stations={pumpStations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} />);
+
+    await user.click(screen.getByRole("button", { name: /add second employee/i }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pump A operator" }), "edwin");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pump A employee 2" }), "manoj");
+    await user.click(screen.getByRole("button", { name: /start business day/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts", expect.objectContaining({ method: "POST" })));
+    const [, request] = fetchMock.mock.calls.find(([url]) => url === "/api/shifts")!;
+    const body = JSON.parse((request as RequestInit).body as string);
+    expect(body.staffAssignments).toEqual([
+      { staffId: "edwin", staffName: "Edwin", nozzleId: "a_n1" },
+      { staffId: "edwin", staffName: "Edwin", nozzleId: "a_n3" },
+      { staffId: "manoj", staffName: "Manoj", nozzleId: "a_n2" },
+      { staffId: "manoj", staffName: "Manoj", nozzleId: "a_n4" }
+    ]);
   });
 
   it("keeps active rates, nozzle openings and nozzle employees editable on the closing workspace", () => {
@@ -544,6 +567,7 @@ describe("DailyForecourtSheet", () => {
       expect(body.staffName).toBe("Arun");
       expect(body.shiftStartTime).toBe("06:00");
       expect(body.shiftEndTime).toBe("14:00");
+      expect(body.nozzleIds).toEqual(["a_n1", "a_n2", "a_n3", "a_n4"]);
       expect(body.closingNozzleReadings).toMatchObject({ a_n1: "150" });
       expect(body.closingNozzleReadings).not.toHaveProperty("b_n1");
       expect(body.collections).toMatchObject({ cash: "1000" });
@@ -552,7 +576,7 @@ describe("DailyForecourtSheet", () => {
       expect(await screen.findByText(/^completed \d/i)).toBeInTheDocument();
       expect(screen.getByRole("spinbutton", { name: "A-N1 closing totalizer" })).toHaveValue(150);
       expect(screen.getByRole("spinbutton", { name: "A-N1 editable opening totalizer" })).toHaveValue(150);
-      expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("");
+      expect(screen.getByLabelText("Pump A shift start time")).toHaveValue("14:00");
       expect(screen.getByLabelText("Pump A shift end time")).toHaveValue("");
       expect(screen.getByRole("spinbutton", { name: "Pump A cash collected" })).toHaveValue(0);
       expect(screen.getByRole("combobox", { name: "Pump A active operator" })).toHaveValue("");

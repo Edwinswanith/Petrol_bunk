@@ -28,7 +28,7 @@ function makeEntry(params: {
   });
   return {
     id: params.id, pumpId: params.pumpId, pumpLabel: `Pump ${params.pumpId}`,
-    staffId: params.staffId, staffName: params.staffName, businessDate: "2026-09-04",
+    staffId: params.staffId, staffName: params.staffName, nozzleIds: params.stations.map((station) => station.stationId), businessDate: "2026-09-04",
     shiftStartTime: params.shiftStartTime, shiftEndTime: params.shiftEndTime,
     openingNozzleReadings: params.opening, closingNozzleReadings: params.closing, nonSaleDispenses,
     collections: { cash: summary.cash, upi: summary.upi, card: summary.card, credit: summary.credit, other: summary.other, declaredCashHandover: summary.declaredCashHandover },
@@ -128,6 +128,24 @@ describe("applyPumpShiftEntryCorrection", () => {
     });
 
     expect(updated.pumpShiftHistory![1]).toEqual(segB);
+  });
+
+  it("cascades a correction only through later records that share the corrected nozzles", () => {
+    const edwinStations = [pumpAStations[0], pumpAStations[2]];
+    const manojStations = [pumpAStations[1]];
+    const edwinFirst = makeEntry({ id: "edwin-1", pumpId: "pump-a", stations: edwinStations, staffId: "staff-edwin", staffName: "Edwin", opening: { a_n1: "0", a_n3: "0" }, closing: { a_n1: "100", a_n3: "100" } });
+    const manoj = makeEntry({ id: "manoj-1", pumpId: "pump-a", stations: manojStations, staffId: "staff-manoj", staffName: "Manoj", opening: { a_n2: "0" }, closing: { a_n2: "80" } });
+    const edwinLater = makeEntry({ id: "edwin-2", pumpId: "pump-a", stations: edwinStations, staffId: "staff-edwin", staffName: "Edwin", opening: { a_n1: "100", a_n3: "100" }, closing: { a_n1: "200", a_n3: "200" } });
+    const shift = baseShift({ pumpShiftHistory: [edwinFirst, manoj, edwinLater] });
+
+    const updated = applyPumpShiftEntryCorrection(shift, "pump-a", "edwin-1", {
+      staffId: "staff-edwin", staffName: "Edwin",
+      closingNozzleReadings: { a_n1: "120", a_n3: "110" }, nonSaleDispenses: [], reason: "Corrected Edwin's pair"
+    });
+
+    expect(updated.pumpShiftHistory![1]).toEqual(manoj);
+    expect(updated.pumpShiftHistory![2].openingNozzleReadings).toEqual({ a_n1: "120", a_n3: "110" });
+    expect(updated.pumpShiftHistory![2].cascadeAdjustment).toMatchObject({ fromEntryId: "edwin-1" });
   });
 
   it("refuses to correct an entry whose id matches but whose pump does not", () => {

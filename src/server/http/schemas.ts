@@ -74,6 +74,7 @@ export const activeShiftDateCorrectionSchema = z.object({
 export const pumpShiftCompletionSchema = z.object({
   staffId: z.string().min(1),
   staffName: z.string().min(1),
+  nozzleIds: z.array(z.string().min(1)).min(1).max(4).optional(),
   shiftStartTime: z.string().trim().max(20).optional(),
   shiftEndTime: z.string().trim().max(20).optional(),
   closingNozzleReadings: z.record(z.string(), decimal),

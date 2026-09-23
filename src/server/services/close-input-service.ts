@@ -77,10 +77,16 @@ export async function prepareCloseInput(
       totals.declaredCashHandover = totals.declaredCashHandover.plus(collection.declaredCashHandover);
 
       const nozzleIds = new Set(stations.map((station) => station.stationId));
-      const assignment = (shift.staffAssignments ?? []).find((item) => nozzleIds.has(item.nozzleId));
-      if (assignment) {
+      const assignments = (shift.staffAssignments ?? []).filter((item) => nozzleIds.has(item.nozzleId));
+      const staffIds = [...new Set(assignments.map((assignment) => assignment.staffId).filter(Boolean))];
+      if (staffIds.length === 1) {
         const tender = Decimal.sum(collection.cash, collection.upi, collection.card, collection.credit, collection.other);
-        staffTotals.set(assignment.staffId, (staffTotals.get(assignment.staffId) ?? new Decimal(0)).plus(tender));
+        staffTotals.set(staffIds[0], (staffTotals.get(staffIds[0]) ?? new Decimal(0)).plus(tender));
+      } else if (staffIds.length > 1) {
+        for (const staffId of staffIds) {
+          const tender = new Decimal(input.staffHandovers?.[staffId] ?? 0);
+          staffTotals.set(staffId, (staffTotals.get(staffId) ?? new Decimal(0)).plus(tender));
+        }
       }
     }
     canonicalPayments = {
