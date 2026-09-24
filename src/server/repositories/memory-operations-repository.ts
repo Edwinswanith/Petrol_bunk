@@ -6,6 +6,7 @@ import type {
   OpenShiftInput,
   PumpShiftCompletionInput,
   PumpShiftCorrectionInput,
+  PumpShiftVoidInput,
   ShiftRecord
 } from "@/server/domain/operations";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
@@ -13,8 +14,10 @@ import Decimal from "decimal.js";
 import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domain/forecourt";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
 import { applyActiveShiftCorrection, applyActiveShiftDateCorrection, applyActiveShiftPriceUpdate } from "@/server/services/active-shift-correction-service";
+import { automaticBusinessDateRollover } from "@/server/services/active-shift-rollover-service";
 import { applyPumpShiftCompletion } from "@/server/services/pump-shift-completion-service";
 import { applyPumpShiftEntryCorrection } from "@/server/services/pump-shift-correction-service";
+import { applyPumpShiftEntryVoid } from "@/server/services/pump-shift-void-service";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -247,6 +250,19 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       return clone(updated);
     },
 
+    async rolloverActiveShiftDate(id: string, today: string): Promise<ShiftRecord> {
+      const shift = shifts.get(id);
+      if (!shift) throw new Error("Shift not found");
+      const businessDate = automaticBusinessDateRollover(shift, today);
+      if (!businessDate) return clone(shift);
+      const updated = applyActiveShiftDateCorrection(shift, {
+        businessDate,
+        reason: "Automatically moved to the next completed business day"
+      });
+      shifts.set(id, updated);
+      return clone(updated);
+    },
+
     async completePumpShift(id: string, pumpId: string, input: PumpShiftCompletionInput): Promise<ShiftRecord> {
       const shift = shifts.get(id);
       if (!shift) throw new Error("Shift not found");
@@ -259,6 +275,14 @@ export function createMemoryOperationsRepository(options: { seedDemoData: boolea
       const shift = shifts.get(id);
       if (!shift) throw new Error("Shift not found");
       const updated = applyPumpShiftEntryCorrection(shift, pumpId, entryId, input);
+      shifts.set(id, updated);
+      return clone(updated);
+    },
+
+    async voidPumpShiftEntry(id: string, pumpId: string, entryId: string, input: PumpShiftVoidInput, today?: string): Promise<ShiftRecord> {
+      const shift = shifts.get(id);
+      if (!shift) throw new Error("Shift not found");
+      const updated = applyPumpShiftEntryVoid(shift, pumpId, entryId, input, today);
       shifts.set(id, updated);
       return clone(updated);
     },

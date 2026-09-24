@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { PumpShiftRecord, ShiftReconciliation } from "@/server/domain/operations";
 import { pumpGroupId } from "@/server/domain/pump-grouping";
+import { TodaySavedPumpShifts } from "@/components/day/today-saved-pump-shifts";
 
 function readDraft<T>(key: string): Partial<T> | undefined {
   if (typeof window === "undefined") return undefined;
@@ -53,6 +54,7 @@ type ActiveShift = {
 
 type Props = {
   businessDate: string;
+  today?: string;
   products: Product[];
   staff: Staff[];
   stations: Station[];
@@ -200,7 +202,7 @@ function shiftDuration(start: string, end: string) {
   return minutes;
 }
 
-export function DailyForecourtSheet({ businessDate, products, staff, stations, tanks, tankLevels = [], missingBusinessDays = [], previousReadings, previousReadingSources = {}, activeShift, attendance }: Props) {
+export function DailyForecourtSheet({ businessDate, today = businessDate, products, staff, stations, tanks, tankLevels = [], missingBusinessDays = [], previousReadings, previousReadingSources = {}, activeShift, attendance }: Props) {
   const router = useRouter();
   const pumps = useMemo(() => layout(stations, activeShift?.staffAssignments), [stations, activeShift]);
   const [saving, setSaving] = useState(false);
@@ -232,13 +234,48 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
   const [draftSavedAt, setDraftSavedAt] = useState<Date>();
   const [setupSavedAt, setSetupSavedAt] = useState<Date>();
   const [activeBusinessDateDraft, setActiveBusinessDateDraft] = useState(activeShift?.businessDate ?? "");
+  const [confirmedBusinessDate, setConfirmedBusinessDate] = useState(activeShift?.businessDate ?? "");
   const [dateSaving, setDateSaving] = useState(false);
   const [dateSavedAt, setDateSavedAt] = useState<Date>();
   const activeBusinessDate = activeShift?.businessDate;
+  const activeShiftId = activeShift?.id;
+  const routerRef = useRef(router);
+  useEffect(() => { routerRef.current = router; }, [router]);
+  const rolloverAttempt = useRef<string | undefined>(undefined);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs the draft from the server-driven prop, an external system
-    if (activeBusinessDate) setActiveBusinessDateDraft(activeBusinessDate);
+    if (activeBusinessDate) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs drafts from the server-driven prop, an external system
+      setActiveBusinessDateDraft(activeBusinessDate);
+      setConfirmedBusinessDate(activeBusinessDate);
+    }
   }, [activeBusinessDate]);
+  useEffect(() => {
+    if (!activeShiftId || !activeBusinessDate || activeBusinessDate >= today) return;
+    const attempt = `${activeShiftId}:${activeBusinessDate}:${today}`;
+    if (rolloverAttempt.current === attempt) return;
+    rolloverAttempt.current = attempt;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/shifts/${activeShiftId}/rollover`, { method: "POST" });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "Could not advance the business date");
+        if (!cancelled && body.businessDate !== activeBusinessDate) {
+          setActiveBusinessDateDraft(body.businessDate);
+          setConfirmedBusinessDate(body.businessDate);
+          routerRef.current.refresh();
+        }
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "Could not advance the business date");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (rolloverAttempt.current === attempt) rolloverAttempt.current = undefined;
+    };
+  }, [activeBusinessDate, activeShiftId, today]);
   const closeKey = useRef<string | undefined>(undefined);
   const openingDraftKey = `forecourt-draft:opening:${businessDateDraft}`;
   const closingDraftKey = activeShift ? `forecourt-draft:closing:${activeShift.id}` : undefined;
@@ -396,6 +433,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
         body: JSON.stringify({ businessDate: activeBusinessDateDraft })
       });
       const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not update the business date");
+      setConfirmedBusinessDate(body.businessDate ?? activeBusinessDateDraft);
       setDateSavedAt(new Date()); router.refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update the business date"); }
     finally { setDateSaving(false); }
@@ -439,6 +477,22 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     finally { setPumpSaving((current) => ({ ...current, [allocation.id]: false })); }
   }
 
+  function handlePumpShiftDeleted(updatedShift: { pumpShiftHistory?: PumpShiftRecord[] }, deletedEntry: PumpShiftRecord) {
+    const history = updatedShift.pumpShiftHistory ?? [];
+    setPumpShiftHistory(history);
+    setOpeningReadings(Object.fromEntries(stations.map((station) => {
+      const stationEntries = history.filter((entry) => entry.closingNozzleReadings[station.stationId] !== undefined);
+      const latest = stationEntries.at(-1);
+      return [station.stationId, latest?.closingNozzleReadings[station.stationId] ?? activeShift?.openingNozzleReadings[station.stationId] ?? previousReadings[station.stationId] ?? ""];
+    })));
+    const deletedNozzles = new Set(deletedEntry.nozzleIds ?? Object.keys(deletedEntry.closingNozzleReadings));
+    setClosingReadings((current) => Object.fromEntries(Object.entries(current).filter(([stationId]) => !deletedNozzles.has(stationId))));
+    setTestFuel((current) => Object.fromEntries(Object.entries(current).filter(([stationId]) => !deletedNozzles.has(stationId))));
+    setTestFuelReturned((current) => ({ ...current, ...Object.fromEntries([...deletedNozzles].map((stationId) => [stationId, true])) }));
+    setPreview(undefined);
+    setPumpSavedAt({});
+  }
+
   async function review(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!activeShift) return; setSaving(true); setError("");
     try {
@@ -454,7 +508,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
     setSaving(true); setError("");
     try {
       const response = await fetch(`/api/shifts/${activeShift.id}/close`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": closeKey.current ??= crypto.randomUUID() }, body: JSON.stringify(closePayload()) });
-      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not close the business day"); setClosedRecord({ ...body, businessDate: activeShift.businessDate }); if (closingDraftKey) clearDraft(closingDraftKey); router.refresh();
+      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Could not close the business day"); setClosedRecord({ ...body, businessDate: confirmedBusinessDate || activeShift.businessDate }); if (closingDraftKey) clearDraft(closingDraftKey); router.refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not close the business day"); }
     finally { setSaving(false); }
   }
@@ -481,7 +535,7 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
 
   return <div className="daily-sheet">
     <section className="day-command panel">
-      <div><p className="eyebrow">{businessDate} · Owner entry</p><h1>Today&apos;s forecourt sheet</h1><p>One page for staff, eight totalizers, collections and tank reconciliation.</p></div>
+      <div><p className="eyebrow">{confirmedBusinessDate || businessDate} · Owner entry</p><h1>Today&apos;s forecourt sheet</h1><p>One page for staff, eight totalizers, collections and tank reconciliation.</p></div>
       <div className="day-status"><span className={`status-pill ${activeShift ? "warning" : "healthy"}`}>{closedRecord ? "CLOSED" : activeShift ? "OPEN" : "READY"}</span><small>{activeShift ? `Started ${outletTime(activeShift.startedAt)}` : "Confirm the morning position"}</small></div>
     </section>
 
@@ -499,8 +553,9 @@ export function DailyForecourtSheet({ businessDate, products, staff, stations, t
       <div className="daily-sticky-action"><span><strong>{stations.length} nozzles · {pumps.length} staff positions</strong><small>Opening values and prices are snapshotted for today.</small></span>{draftSavedAt ? <span className="draft-saved-indicator"><Save size={14} />Draft saved {draftSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}<button className="button primary" disabled={saving || !staff.length} type="submit"><Play size={16} />{saving ? "Starting…" : "Start business day"}</button></div>
     </form></> : !closedRecord ? <form id="daily-closing-form" onSubmit={review}>
       <section className="active-day-console"><div className="active-day-heading"><span><small>Open day control centre</small><strong>Rates, openings and employees remain correctable until close</strong></span><span className="payroll-commitment"><small>Salary commitment</small><strong>{inr(String(monthlyPayroll))}</strong><em>monthly payroll</em></span></div><div className="active-rate-grid">{[...products].sort((a, b) => (a.code === "PETROL" ? -1 : b.code === "PETROL" ? 1 : 0)).map((product) => <article key={product.id}><span className={`fuel-chip ${product.id}`}>{product.name}</span><label><span>Reseller purchase</span><span className="input-wrap"><input aria-label={`${product.name} active reseller purchase price`} min="0" onChange={(event) => setRates({ ...rates, [product.id]: { ...rates[product.id], cost: event.target.value } })} step="0.01" type="number" value={rates[product.id]?.cost ?? ""} /><span className="unit">₹</span></span></label><label><span>Customer selling</span><span className="input-wrap"><input aria-label={`${product.name} active customer selling price`} min="0" onChange={(event) => setRates({ ...rates, [product.id]: { ...rates[product.id], selling: event.target.value } })} step="0.01" type="number" value={rates[product.id]?.selling ?? ""} /><span className="unit">₹</span></span></label><span className="rate-margin"><small>Margin / L</small><strong>{inr(String(Number(rates[product.id]?.selling || 0) - Number(rates[product.id]?.cost || 0)))}</strong></span></article>)}</div><div className="pump-save-row"><button className="button soft" disabled={saving} onClick={savePrices} type="button"><PencilLine size={15} />{saving ? "Saving…" : "Save prices"}</button>{setupSavedAt ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Saved {setupSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}</div></section>
-      <div className="recording-date-banner"><CalendarClock size={18} /><div className="recording-date-info"><strong>Recording for: {dateLabel(activeShift.businessDate)}</strong><small>Entering data for a different day? Correct the date below — you can do this any time before closing this day.</small></div><div className="recording-date-edit"><input aria-label="Active business date" onChange={(event) => setActiveBusinessDateDraft(event.target.value)} type="date" value={activeBusinessDateDraft} /><button className="button soft" disabled={dateSaving || !activeBusinessDateDraft || activeBusinessDateDraft === activeShift.businessDate} onClick={saveBusinessDate} type="button">{dateSaving ? "Saving…" : "Save date"}</button>{dateSavedAt ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Date saved {dateSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}</div></div>
+      <div className="recording-date-banner"><CalendarClock size={18} /><div className="recording-date-info"><strong>Recording for: {dateLabel(confirmedBusinessDate || activeShift.businessDate)}</strong><small>Entering data for a different day? Correct the date below — you can do this any time before closing this day.</small></div><div className="recording-date-edit"><input aria-label="Active business date" onChange={(event) => setActiveBusinessDateDraft(event.target.value)} type="date" value={activeBusinessDateDraft} /><button className="button soft" disabled={dateSaving || !activeBusinessDateDraft || activeBusinessDateDraft === (confirmedBusinessDate || activeShift.businessDate)} onClick={saveBusinessDate} type="button">{dateSaving ? "Saving…" : "Save date"}</button>{dateSavedAt ? <span className="pump-saved-indicator"><CheckCircle2 size={13} />Date saved {dateSavedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> : null}</div></div>
       <PumpClosingDeck pumps={pumps} staff={staff} allocations={allocations} setAllocations={setAllocations} openingReadings={openingReadings} setOpeningReadings={setOpeningReadings} closingReadings={closingReadings} setClosingReadings={setClosingReadings} litres={litres} meteredLitres={meteredLitres} revenue={stationRevenue} profit={stationProfit} liveRevenue={liveRevenue} testFuel={testFuel} setTestFuel={setTestFuel} testFuelValue={stationTestFuelValue} collections={collections} setCollections={setCollections} pumpShiftTimes={pumpShiftTimes} setPumpShiftTimes={setPumpShiftTimes} completePumpShift={completePumpShift} pumpSaving={pumpSaving} pumpSavedAt={pumpSavedAt} />
+      <TodaySavedPumpShifts entries={pumpShiftHistory} onDeleted={handlePumpShiftDeleted} shiftId={activeShift.id} today={today} />
       <TankDeck mode="closing" tanks={tanks} openingStocks={activeShift.openingTankStocks} values={closingTankStocks} onChange={setClosingTankStocks} />
       <label className="field active-correction-reason"><span>Reason for an opening, employee or rate correction</span><input name="activeCorrectionReason" onChange={(event) => setActiveCorrectionReason(event.target.value)} placeholder="Optional unless correcting the morning sheet" value={activeCorrectionReason} /></label>
       <label className="field variance-note"><span>Variance explanation</span><textarea name="varianceExplanation" onChange={(event) => setVarianceExplanation(event.target.value)} placeholder="Explain any payment, cash or physical tank difference before closing." value={varianceExplanation} /></label>

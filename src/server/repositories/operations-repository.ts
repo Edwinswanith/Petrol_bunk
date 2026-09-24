@@ -1,4 +1,4 @@
-import type { ActiveShiftCorrectionInput, ActiveShiftDateCorrectionInput, ActiveShiftPriceUpdateInput, CloseShiftInput, OpenShiftInput, PumpShiftCompletionInput, PumpShiftCorrectionInput, ShiftRecord } from "@/server/domain/operations";
+import type { ActiveShiftCorrectionInput, ActiveShiftDateCorrectionInput, ActiveShiftPriceUpdateInput, CloseShiftInput, OpenShiftInput, PumpShiftCompletionInput, PumpShiftCorrectionInput, PumpShiftVoidInput, ShiftRecord } from "@/server/domain/operations";
 import type { InventoryMovement, TankStockAdjustmentInput } from "@/server/domain/forecourt";
 
 export interface OperationsRepository {
@@ -10,8 +10,10 @@ export interface OperationsRepository {
   updateActiveShift(id: string, input: ActiveShiftCorrectionInput): Promise<ShiftRecord>;
   updateActiveShiftPrices(id: string, input: ActiveShiftPriceUpdateInput): Promise<ShiftRecord>;
   updateActiveShiftDate(id: string, input: ActiveShiftDateCorrectionInput): Promise<ShiftRecord>;
+  rolloverActiveShiftDate(id: string, today: string): Promise<ShiftRecord>;
   completePumpShift(id: string, pumpId: string, input: PumpShiftCompletionInput): Promise<ShiftRecord>;
   correctPumpShiftEntry(id: string, pumpId: string, entryId: string, input: PumpShiftCorrectionInput): Promise<ShiftRecord>;
+  voidPumpShiftEntry(id: string, pumpId: string, entryId: string, input: PumpShiftVoidInput, today?: string): Promise<ShiftRecord>;
   getTankBalances(): Promise<Record<string, string>>;
   adjustTankStock(input: TankStockAdjustmentInput): Promise<InventoryMovement>;
   listInventoryMovements(tankId?: string): Promise<InventoryMovement[]>;

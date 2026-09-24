@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DailyForecourtSheet } from "@/components/day/daily-forecourt-sheet";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-beforeEach(() => localStorage.clear());
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+beforeEach(() => { window.localStorage.clear(); refresh.mockReset(); });
 afterEach(() => vi.unstubAllGlobals());
 
 const station = (pump: "A" | "B", nozzle: number) => {
@@ -172,6 +173,27 @@ describe("DailyForecourtSheet", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/business-date", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ businessDate: "2026-09-05" }) })));
     await screen.findByText(/date saved/i);
+  });
+
+  it("asks the server to roll a stale active day forward automatically and refreshes when it advances", async () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ id: "open", businessDate: "2026-09-24" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DailyForecourtSheet today="2026-09-24" attendance={[]} businessDate="2026-09-23" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-23", startedAt: "2026-09-23T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/rollover", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not request an automatic rollover when the active business date is already current", async () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DailyForecourtSheet today="2026-09-24" attendance={[]} businessDate="2026-09-24" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-24", startedAt: "2026-09-23T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    await waitFor(() => expect(fetchMock).not.toHaveBeenCalled());
   });
 
   it("shows a read-only tank level gauge for each fuel above the rate panel, without a value there being editable", () => {
@@ -507,11 +529,11 @@ describe("DailyForecourtSheet", () => {
         const field = screen.getByRole("spinbutton", { name: `${code} opening totalizer` });
         await user.clear(field); await user.type(field, "100");
       }
-      expect(localStorage.getItem("forecourt-draft:opening:2026-09-01")).not.toBeNull();
+      expect(window.localStorage.getItem("forecourt-draft:opening:2026-09-01")).not.toBeNull();
 
       await user.click(screen.getByRole("button", { name: /start business day/i }));
 
-      await waitFor(() => expect(localStorage.getItem("forecourt-draft:opening:2026-09-01")).toBeNull());
+      await waitFor(() => expect(window.localStorage.getItem("forecourt-draft:opening:2026-09-01")).toBeNull());
     });
 
     it("keeps the closing form filled in after the page is left and revisited", async () => {
@@ -539,7 +561,7 @@ describe("DailyForecourtSheet", () => {
 
     it("shows the freshly loaded server rates and operator, not a stale local draft saved before an earlier price/setup update", () => {
       const activeShift = { id: "shift-1", name: "Daily", businessDate: "2026-09-01", startedAt: "2026-09-01T06:00:00.000Z", openingNozzleReadings: { a_n1: "0", a_n2: "0", a_n3: "0", a_n4: "0" }, openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) };
-      localStorage.setItem("forecourt-draft:closing:shift-1", JSON.stringify({
+      window.localStorage.setItem("forecourt-draft:closing:shift-1", JSON.stringify({
         operatorIds: { "pump-a": "priya" },
         openingReadings: { a_n1: "9999" },
         rates: { petrol: { cost: "50.00", selling: "60.00" }, diesel: { cost: "40.00", selling: "45.00" } }
@@ -573,13 +595,13 @@ describe("DailyForecourtSheet", () => {
         const field = screen.getByRole("spinbutton", { name: `${tank.name} closing stock` });
         await user.clear(field); await user.type(field, tank.currentStock);
       }
-      expect(localStorage.getItem("forecourt-draft:closing:shift-1")).not.toBeNull();
+      expect(window.localStorage.getItem("forecourt-draft:closing:shift-1")).not.toBeNull();
 
       await user.click(screen.getByRole("button", { name: /review closing/i }));
       await waitFor(() => expect(screen.getByRole("button", { name: /close day/i })).toBeEnabled());
       await user.click(screen.getByRole("button", { name: /close day/i }));
 
-      await waitFor(() => expect(localStorage.getItem("forecourt-draft:closing:shift-1")).toBeNull());
+      await waitFor(() => expect(window.localStorage.getItem("forecourt-draft:closing:shift-1")).toBeNull());
     });
 
   });

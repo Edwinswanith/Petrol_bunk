@@ -237,6 +237,56 @@ describe("MemoryOperationsRepository", () => {
     expect(afterDay5.pumpShiftHistory).toMatchObject([{ businessDate: "2026-09-04" }, { businessDate: "2026-09-05" }]);
   });
 
+  it("automatically rolls a fully completed active day forward without changing its history", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const stationSnapshots = (["a", "b"] as const).flatMap((pump) => [1, 2, 3, 4].map((nozzle) => ({
+      stationId: `${pump}_n${nozzle}`, code: `${pump.toUpperCase()}-N${nozzle}`, name: `Nozzle ${nozzle}`,
+      productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank",
+      pricePerLitre: "100", costPerLitre: "95", dispenserId: `pump-${pump}`, dispenserCode: pump.toUpperCase(), nozzleNumber: nozzle
+    })));
+    const shift = await repository.openShift({
+      name: "Daily forecourt sheet", businessDate: "2026-09-23", staffOnDuty: ["Arun"], stationSnapshots,
+      openingNozzleReadings: Object.fromEntries(stationSnapshots.map((station) => [station.stationId, "100"])),
+      openingTankStocks: { petrol_tank: "5000" }
+    }, "rollover-open");
+
+    for (const pump of ["a", "b"] as const) {
+      const nozzleIds = [1, 2, 3, 4].map((number) => `${pump}_n${number}`);
+      await repository.completePumpShift(shift.id, `pump-${pump}`, {
+        staffId: "arun", staffName: "Arun", nozzleIds,
+        closingNozzleReadings: Object.fromEntries(nozzleIds.map((id) => [id, "200"])), nonSaleDispenses: []
+      });
+    }
+
+    const rolled = await repository.rolloverActiveShiftDate(shift.id, "2026-09-24");
+    const replay = await repository.rolloverActiveShiftDate(shift.id, "2026-09-24");
+
+    expect(rolled.businessDate).toBe("2026-09-24");
+    expect(rolled.pumpShiftHistory).toHaveLength(2);
+    expect(rolled.pumpShiftHistory?.every((entry) => entry.businessDate === "2026-09-23")).toBe(true);
+    expect(rolled.corrections?.at(-1)).toMatchObject({
+      reason: "Automatically moved to the next completed business day",
+      previousBusinessDate: "2026-09-23",
+      revisedBusinessDate: "2026-09-24"
+    });
+    expect(replay.version).toBe(rolled.version);
+    expect(replay.corrections).toHaveLength(rolled.corrections?.length ?? 0);
+  });
+
+  it("does not automatically roll an incomplete active day", async () => {
+    const repository = createMemoryOperationsRepository({ seedDemoData: false });
+    const shift = await repository.openShift({
+      name: "Daily forecourt sheet", businessDate: "2026-09-23", staffOnDuty: [],
+      stationSnapshots: [{ stationId: "a_n1", code: "A-N1", name: "Nozzle 1", productId: "petrol", productName: "Petrol", tankId: "petrol_tank", tankName: "Petrol Tank", pricePerLitre: "100", costPerLitre: "95", dispenserId: "pump-a" }],
+      openingNozzleReadings: { a_n1: "100" }, openingTankStocks: { petrol_tank: "5000" }
+    }, "incomplete-rollover-open");
+
+    const result = await repository.rolloverActiveShiftDate(shift.id, "2026-09-24");
+
+    expect(result.businessDate).toBe("2026-09-23");
+    expect(result.version).toBe(shift.version);
+  });
+
   it("deducts aggregated station outflow from tank inventory once when a shift closes", async () => {
     const repository = createMemoryOperationsRepository({ seedDemoData: false });
     const shift = await repository.openShift({

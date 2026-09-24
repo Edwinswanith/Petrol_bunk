@@ -26,6 +26,7 @@ export function apiError(error: unknown) {
     message === "Close the active shift before opening another" ||
     message === "Closed shifts are immutable in v1" ||
     message === "Fuel receipt has already been voided" ||
+    message === "Only entries from today's open business date can be deleted" ||
     message.startsWith("Shift changed on another device") ||
     message.startsWith("Tank stock changed on another device") ||
     message.startsWith("Tank stock changed while closing") ||
@@ -33,7 +34,7 @@ export function apiError(error: unknown) {
   ) {
     return NextResponse.json({ error: message, code: "STATE_CONFLICT", requestId }, { status: 409 });
   }
-  if (message.startsWith("Unknown nozzle:") || message.startsWith("Unknown pump:") || message.startsWith("Missing closing")) {
+  if (message.startsWith("Unknown nozzle:") || message.startsWith("Unknown pump:") || message.startsWith("Missing closing") || message === "Enter a reason before deleting this entry") {
     return NextResponse.json({ error: message, code: "COMMAND_FAILED", requestId }, { status: 400 });
   }
   if (message.includes("already exists") || message.startsWith("Unknown station:") || message.startsWith("Missing opening") || message.startsWith("Unknown assigned station:") || message.includes("product") || message.includes("tank")) {

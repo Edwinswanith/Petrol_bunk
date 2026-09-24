@@ -153,6 +153,20 @@ export type PumpShiftCascadeAdjustment = {
   adjustedAt: string;
 };
 
+export type PumpShiftVoidInput = {
+  reason: string;
+};
+
+export type PumpShiftVoid = {
+  id: string;
+  entryId: string;
+  pumpId: string;
+  businessDate: string;
+  reason: string;
+  voidedAt: string;
+  entry: PumpShiftRecord;
+};
+
 export type ShiftCorrection = {
   id: string; correctedAt: string; reason: string;
   previousOpeningNozzleReadings: Record<string, string>; revisedOpeningNozzleReadings: Record<string, string>;
@@ -252,4 +266,5 @@ export type ShiftRecord = OpenShiftInput & {
   varianceExplanation?: string;
   corrections?: ShiftCorrection[];
   pumpShiftHistory?: PumpShiftRecord[];
+  pumpShiftVoids?: PumpShiftVoid[];
 };

@@ -2,6 +2,100 @@ import { expect, test } from "@playwright/test";
 
 const responsiveRoutes = ["/", "/day", "/shifts", "/stock", "/finance", "/more", "/staff", "/reports", "/settings"];
 
+function indiaBusinessDate() {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+test("Today automatically advances after every pump is completed for the previous business date", async ({ page, request }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One isolated rollover flow is sufficient.");
+  const shifts = await (await request.get("/api/shifts")).json();
+  const active = shifts.find((shift: { state: string }) => shift.state === "OPEN");
+  expect(active).toBeTruthy();
+
+  const stationsByPump = new Map<string, Array<{ stationId: string }>>();
+  for (const station of active.stationSnapshots) {
+    const pumpId = station.dispenserId ?? station.sideId ?? station.stationId;
+    stationsByPump.set(pumpId, [...(stationsByPump.get(pumpId) ?? []), station]);
+  }
+  for (const [pumpId, stations] of stationsByPump) {
+    const nozzleIds = stations.map((station) => station.stationId);
+    const response = await request.patch(`/api/shifts/${active.id}/pumps/${pumpId}`, { data: {
+      staffId: "rollover-test-employee", staffName: "Rollover Test Employee", nozzleIds,
+      closingNozzleReadings: Object.fromEntries(nozzleIds.map((id) => [id, (Number(active.openingNozzleReadings[id]) + 1).toFixed(3)])),
+      nonSaleDispenses: []
+    } });
+    expect(response.ok()).toBe(true);
+  }
+
+  const expectedDate = new Date(`${active.businessDate}T00:00:00.000Z`);
+  expectedDate.setUTCDate(expectedDate.getUTCDate() + 1);
+  const nextBusinessDate = expectedDate.toISOString().slice(0, 10);
+
+  await page.goto("/day");
+  await expect(page.getByLabel("Active business date")).toHaveValue(nextBusinessDate);
+
+  const updated = (await (await request.get("/api/shifts")).json()).find((shift: { id: string }) => shift.id === active.id);
+  expect(updated.businessDate).toBe(nextBusinessDate);
+  expect(updated.pumpShiftHistory.every((entry: { businessDate: string }) => entry.businessDate === active.businessDate)).toBe(true);
+});
+
+test("owner can save and delete a dummy entry for today without changing previous records", async ({ page, request }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One isolated destructive-flow check is sufficient.");
+  const today = indiaBusinessDate();
+  const initialShifts = await (await request.get("/api/shifts")).json();
+  const active = initialShifts.find((shift: { state: string }) => shift.state === "OPEN");
+  const previousRecords = initialShifts.filter((shift: { state: string }) => shift.state === "CLOSED");
+  expect(active).toBeTruthy();
+
+  const dateResponse = await request.patch(`/api/shifts/${active.id}/business-date`, { data: { businessDate: today, reason: "Local dummy deletion verification" } });
+  expect(dateResponse.ok()).toBe(true);
+  const current = await dateResponse.json();
+  const station = current.stationSnapshots[0];
+  const pumpId = station.dispenserId ?? station.sideId ?? station.stationId;
+  const previousEntry = [...(current.pumpShiftHistory ?? [])].reverse().find((entry: { closingNozzleReadings: Record<string, string> }) => entry.closingNozzleReadings[station.stationId] !== undefined);
+  const opening = previousEntry?.closingNozzleReadings[station.stationId] ?? current.openingNozzleReadings[station.stationId];
+  const closing = (Number(opening) + 1).toFixed(3);
+  const saveResponse = await request.patch(`/api/shifts/${current.id}/pumps/${pumpId}`, { data: {
+    staffId: "dummy-delete-operator", staffName: "Dummy Delete Operator", nozzleIds: [station.stationId],
+    shiftStartTime: "12:00", shiftEndTime: "12:05", closingNozzleReadings: { [station.stationId]: closing }, nonSaleDispenses: []
+  } });
+  expect(saveResponse.ok()).toBe(true);
+  const saved = await saveResponse.json();
+  const dummyEntry = saved.pumpShiftHistory.find((entry: { staffId: string }) => entry.staffId === "dummy-delete-operator");
+  expect(dummyEntry).toBeTruthy();
+
+  await page.goto("/day");
+  const savedPanel = page.getByRole("region", { name: "Saved entries for today" });
+  await expect(savedPanel.getByText("Dummy Delete Operator")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await savedPanel.getByRole("button", { name: `Delete Dummy Delete Operator's ${dummyEntry.pumpLabel} entry` }).click();
+  const mobileDialog = page.getByRole("dialog");
+  await expect(mobileDialog).toBeVisible();
+  const dialogBox = await mobileDialog.boundingBox();
+  expect(dialogBox?.width ?? 1000).toBeLessThanOrEqual(390);
+  expect(dialogBox?.height ?? 1000).toBeLessThanOrEqual(844);
+  await page.getByRole("button", { name: "Keep entry" }).click();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await savedPanel.getByRole("button", { name: `Delete Dummy Delete Operator's ${dummyEntry.pumpLabel} entry` }).click();
+  await page.getByLabel("Reason for deleting this entry").fill("Dummy data used to verify deletion");
+  await page.getByRole("button", { name: "Delete entry" }).click();
+  await expect(savedPanel.getByText("Dummy Delete Operator")).toHaveCount(0);
+  await expect(page.getByLabel(`${station.code} closing totalizer`)).toHaveValue("");
+  await expect(page.getByLabel(`${station.code} editable opening totalizer`)).toHaveValue(opening);
+
+  const finalShifts = await (await request.get("/api/shifts")).json();
+  const finalActive = finalShifts.find((shift: { id: string }) => shift.id === current.id);
+  expect(finalActive.pumpShiftHistory.some((entry: { id: string }) => entry.id === dummyEntry.id)).toBe(false);
+  expect(finalActive.pumpShiftVoids).toEqual(expect.arrayContaining([expect.objectContaining({ entryId: dummyEntry.id, reason: "Dummy data used to verify deletion" })]));
+  expect(finalShifts.filter((shift: { state: string }) => shift.state === "CLOSED")).toEqual(previousRecords);
+
+  await page.goto(`/finance/day/${today}`);
+  await expect(page.getByText("Dummy Delete Operator")).toHaveCount(0);
+});
+
 test("owner screens stay inside common laptop, tablet and mobile viewports", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One browser project covers the responsive matrix.");
 

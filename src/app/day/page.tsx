@@ -44,6 +44,7 @@ export default async function DailyForecourtPage() {
     activeShift={active ? { id: active.id, name: active.name, businessDate: active.businessDate, startedAt: active.startedAt, openingNozzleReadings: active.openingNozzleReadings, openingTankStocks: active.openingTankStocks, staffAssignments: active.staffAssignments ?? [], pumpShiftHistory: active.pumpShiftHistory } : undefined}
     attendance={attendance}
     businessDate={active?.businessDate ?? today}
+    today={today}
     previousReadings={carryForward.readings}
     previousReadingSources={carryForward.sources}
     products={configuration.products.filter((product) => product.active)}

@@ -8,8 +8,10 @@ import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-
 import type { OperationsRepository } from "@/server/repositories/operations-repository";
 import { reconcileShift, requireVarianceExplanation } from "@/server/services/shift-reconciliation-service";
 import { applyActiveShiftCorrection, applyActiveShiftDateCorrection, applyActiveShiftPriceUpdate } from "@/server/services/active-shift-correction-service";
+import { automaticBusinessDateRollover } from "@/server/services/active-shift-rollover-service";
 import { applyPumpShiftCompletion } from "@/server/services/pump-shift-completion-service";
 import { applyPumpShiftEntryCorrection } from "@/server/services/pump-shift-correction-service";
+import { applyPumpShiftEntryVoid } from "@/server/services/pump-shift-void-service";
 
 type StoredShift = ShiftRecord & { _id: string };
 type IdempotencyRecord = { _id: string; shiftId: string; createdAt: Date };
@@ -262,6 +264,26 @@ export function createMongoOperationsRepository(): OperationsRepository {
       if (!result) throw new Error("Business date correction did not complete"); return result;
     },
 
+    async rolloverActiveShiftDate(id, today) {
+      await ensureIndexes();
+      const client = await getMongoClient(); const database = await getMongoDatabase(); const session = client.startSession(); let result: ShiftRecord | undefined;
+      try { await session.withTransaction(async () => {
+        const current = await database.collection<StoredShift>("shifts").findOne({ _id: id }, { session });
+        if (!current) throw new Error("Shift not found");
+        const currentShift = withoutId(current);
+        const businessDate = automaticBusinessDateRollover(currentShift, today);
+        if (!businessDate) { result = currentShift; return; }
+        const corrected = applyActiveShiftDateCorrection(currentShift, {
+          businessDate,
+          reason: "Automatically moved to the next completed business day"
+        });
+        const update = await database.collection<StoredShift>("shifts").replaceOne({ _id: id, version: current.version, state: "OPEN" }, { ...corrected }, { session });
+        if (update.modifiedCount !== 1) throw new Error("Shift changed on another device. Refresh and retry.");
+        result = corrected;
+      }); } finally { await session.endSession(); }
+      if (!result) throw new Error("Automatic business date rollover did not complete"); return result;
+    },
+
     async completePumpShift(id, pumpId, input) {
       await ensureIndexes();
       const client = await getMongoClient(); const database = await getMongoDatabase(); const session = client.startSession(); let result: ShiftRecord | undefined;
@@ -289,6 +311,21 @@ export function createMongoOperationsRepository(): OperationsRepository {
         result = updated;
       }); } finally { await session.endSession(); }
       if (!result) throw new Error("Pump shift correction could not be saved");
+      return result;
+    },
+
+    async voidPumpShiftEntry(id, pumpId, entryId, input, today) {
+      await ensureIndexes();
+      const client = await getMongoClient(); const database = await getMongoDatabase(); const session = client.startSession(); let result: ShiftRecord | undefined;
+      try { await session.withTransaction(async () => {
+        const current = await database.collection<StoredShift>("shifts").findOne({ _id: id }, { session });
+        if (!current) throw new Error("Shift not found");
+        const updated = applyPumpShiftEntryVoid(withoutId(current), pumpId, entryId, input, today);
+        const update = await database.collection<StoredShift>("shifts").replaceOne({ _id: id, version: current.version, state: "OPEN" }, { ...updated }, { session });
+        if (update.modifiedCount !== 1) throw new Error("Shift changed on another device. Refresh and retry.");
+        result = updated;
+      }); } finally { await session.endSession(); }
+      if (!result) throw new Error("Pump shift deletion could not be saved");
       return result;
     },
 

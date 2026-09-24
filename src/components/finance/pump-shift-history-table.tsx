@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { PumpShiftCorrectionDialog } from "@/components/finance/pump-shift-correction-dialog";
+import { PumpShiftDeleteDialog } from "@/components/finance/pump-shift-delete-dialog";
 import type { FinancePumpShiftEntry } from "@/server/services/finance-analytics-service";
 
 type StaffOption = { id: string; name: string };
@@ -16,11 +17,13 @@ export function PumpShiftHistoryTable({
   pumpShifts,
   stationLabels,
   staff,
+  today,
   showDate = true
 }: {
   pumpShifts: FinancePumpShiftEntry[];
   stationLabels: Record<string, string>;
   staff: StaffOption[];
+  today: string;
   showDate?: boolean;
 }) {
   const [editingEntry, setEditingEntry] = useState<FinancePumpShiftEntry | null>(null);
@@ -45,7 +48,7 @@ export function PumpShiftHistoryTable({
               <td className="mono">{formatMoney(entry.expectedSalesValue)}</td>
               <td className="mono">{formatMoney(entry.accountedTender)}</td>
               <td className={`mono ${Number(entry.tenderVariance) < 0 ? "loss-value" : "profit-value"}`}>{formatMoney(entry.tenderVariance)}</td>
-              <td>{entry.shiftState === "OPEN" ? <button aria-label={`Correct ${entry.staffName}'s ${entry.pumpLabel} entry`} className="button ghost" onClick={() => setEditingEntry(entry)} type="button"><Pencil size={14} /></button> : null}</td>
+              <td>{entry.shiftState === "OPEN" ? <span className="pump-shift-row-actions"><button aria-label={`Correct ${entry.staffName}'s ${entry.pumpLabel} entry`} className="button ghost" onClick={() => setEditingEntry(entry)} type="button"><Pencil size={14} /></button>{entry.businessDate === today ? <PumpShiftDeleteDialog entry={entry} /> : null}</span> : null}</td>
             </tr>
           ))}
         </tbody>

@@ -86,6 +86,10 @@ export const pumpShiftCorrectionSchema = pumpShiftCompletionSchema.extend({
   reason: z.string().trim().min(2).max(300)
 });
 
+export const pumpShiftVoidSchema = z.object({
+  reason: z.string().trim().min(2).max(300)
+});
+
 export const staffSchema = z.object({
   name: z.string().trim().min(2).max(80),
   phone: z.string().trim().max(20).optional().default(""),
