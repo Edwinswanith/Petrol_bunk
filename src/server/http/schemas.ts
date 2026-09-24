@@ -1,6 +1,10 @@
 import { z } from "zod";
 
+import { businessDate as currentBusinessDate } from "@/lib/business-time";
+
 const decimal = z.string().regex(/^\d+(\.\d+)?$/, "Enter a positive decimal value");
+// Checked at parse time so the limit follows the real Asia/Kolkata calendar day.
+const pastOrTodayDate = z.string().date().refine((value) => value <= currentBusinessDate(), "Business date cannot be in the future");
 
 export const closeShiftSchema = z.object({
   closingNozzleReadings: z.record(z.string(), decimal),
@@ -42,7 +46,7 @@ const staffAssignmentSchema = z.object({
 
 export const openShiftSchema = z.object({
   name: z.string().min(2).max(80),
-  businessDate: z.string().date(),
+  businessDate: pastOrTodayDate,
   staffOnDuty: z.array(z.string().min(1).max(80)).max(50),
   staffAssignments: z.array(staffAssignmentSchema).max(100).default([]),
   openingNozzleReadings: z.record(z.string(), decimal),
@@ -67,7 +71,7 @@ export const activeShiftPriceUpdateSchema = z.object({
 });
 
 export const activeShiftDateCorrectionSchema = z.object({
-  businessDate: z.string().date(),
+  businessDate: pastOrTodayDate,
   reason: z.string().trim().max(300).optional()
 });
 
@@ -105,7 +109,7 @@ export const staffStatusSchema = z.object({ active: z.boolean(), reason: z.strin
 
 export const attendanceSchema = z.object({
   staffId: z.string().min(1),
-  businessDate: z.string().date(),
+  businessDate: pastOrTodayDate,
   status: z.enum(["PRESENT", "LATE", "ABSENT", "LEAVE"]),
   checkIn: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
   checkOut: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
@@ -171,7 +175,7 @@ export const fuelTankSchema = z.object({
 export const tankStockAdjustmentSchema = z.object({
   currentStock: decimal,
   previousStock: decimal,
-  businessDate: z.string().date(),
+  businessDate: pastOrTodayDate,
   reason: z.string().trim().min(2).max(300)
 });
 

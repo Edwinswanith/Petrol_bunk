@@ -1,3 +1,4 @@
+import { businessDate as currentBusinessDate } from "@/lib/business-time";
 import type { ActiveShiftCorrectionInput, ActiveShiftDateCorrectionInput, ActiveShiftPriceUpdateInput, ShiftCorrection, ShiftRecord } from "@/server/domain/operations";
 
 const productRates = (shift: ShiftRecord) => Object.fromEntries((shift.stationSnapshots ?? []).map((station) => [station.productId, { sellingPricePerLitre: station.pricePerLitre, costPricePerLitre: station.costPerLitre }]));
@@ -38,9 +39,11 @@ export function applyActiveShiftPriceUpdate(shift: ShiftRecord, input: ActiveShi
   return { ...shift, stationSnapshots, corrections: changed ? [...(shift.corrections ?? []), correction] : shift.corrections, version: shift.version + 1 };
 }
 
-export function applyActiveShiftDateCorrection(shift: ShiftRecord, input: ActiveShiftDateCorrectionInput, now = new Date().toISOString()): ShiftRecord {
+export function applyActiveShiftDateCorrection(shift: ShiftRecord, input: ActiveShiftDateCorrectionInput, now = new Date().toISOString(), today = currentBusinessDate()): ShiftRecord {
   if (shift.state === "CLOSED") throw new Error("Closed shifts are immutable in v1");
   if (input.businessDate === shift.businessDate) return shift;
+  // Entries are stamped with the active date, so a future date would file today's sales under a day that hasn't happened.
+  if (input.businessDate > today) throw new Error("Business date cannot be in the future");
   const correction: ShiftCorrection = {
     id: crypto.randomUUID(), correctedAt: now, reason: input.reason?.trim() || "Owner corrected the business date",
     previousOpeningNozzleReadings: structuredClone(shift.openingNozzleReadings), revisedOpeningNozzleReadings: structuredClone(shift.openingNozzleReadings),

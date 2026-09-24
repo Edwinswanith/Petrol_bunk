@@ -35,6 +35,13 @@ describe("applyActiveShiftDateCorrection", () => {
     expect(updated.corrections).toEqual([expect.objectContaining({ reason: "Actually backfilling the 5th", previousBusinessDate: "2026-09-04", revisedBusinessDate: "2026-09-05" })]);
   });
 
+  it("refuses a business date after today but allows today itself", () => {
+    const shift = baseShift({ businessDate: "2026-09-23" });
+
+    expect(() => applyActiveShiftDateCorrection(shift, { businessDate: "2026-10-24" }, undefined, "2026-09-24")).toThrow("Business date cannot be in the future");
+    expect(applyActiveShiftDateCorrection(shift, { businessDate: "2026-09-24" }, undefined, "2026-09-24").businessDate).toBe("2026-09-24");
+  });
+
   it("leaves already-completed pump-shift entries on the date they were actually recorded under", () => {
     const shift = baseShift({ pumpShiftHistory: [completedEntry] });
     const updated = applyActiveShiftDateCorrection(shift, { businessDate: "2026-09-05" });

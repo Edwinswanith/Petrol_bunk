@@ -161,18 +161,30 @@ describe("DailyForecourtSheet", () => {
   it("lets the owner correct an already-open day's business date at any time and saves it", async () => {
     const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === "/api/shifts/open/business-date") return { ok: true, json: async () => ({ id: "open", businessDate: "2026-09-05" }) };
+      if (url === "/api/shifts/open/business-date") return { ok: true, json: async () => ({ id: "open", businessDate: "2026-09-03" }) };
       return { ok: true, json: async () => ({}) };
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-04" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-04", startedAt: "2026-09-04T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
 
-    fireEvent.change(screen.getByLabelText("Active business date"), { target: { value: "2026-09-05" } });
+    fireEvent.change(screen.getByLabelText("Active business date"), { target: { value: "2026-09-03" } });
     expect(screen.getByRole("button", { name: /save date/i })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /save date/i }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/business-date", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ businessDate: "2026-09-05" }) })));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/shifts/open/business-date", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ businessDate: "2026-09-03" }) })));
     await screen.findByText(/date saved/i);
+  });
+
+  it("blocks a future business date and warns before more entries are saved under it", () => {
+    const stations = [1, 2, 3, 4].map((nozzle) => station("A", nozzle));
+    vi.stubGlobal("fetch", vi.fn());
+    render(<DailyForecourtSheet attendance={[]} businessDate="2026-09-04" previousReadings={{}} products={[{ id: "petrol", code: "PETROL", name: "Petrol", sellingPricePerLitre: "102.50", costPricePerLitre: "96.80" }, { id: "diesel", code: "DIESEL", name: "Diesel", sellingPricePerLitre: "100.50", costPricePerLitre: "94.40" }]} staff={[{ id: "arun", name: "Arun", monthlySalary: "18000" }]} stations={stations} tanks={[{ tankId: "petrol_tank", productId: "petrol", name: "Petrol Tank", productName: "Petrol", currentStock: "10000" }, { tankId: "diesel_tank", productId: "diesel", name: "Diesel Tank", productName: "Diesel", currentStock: "9000" }]} activeShift={{ id: "open", name: "Daily", businessDate: "2026-09-04", startedAt: "2026-09-04T06:00:00.000Z", openingNozzleReadings: Object.fromEntries(stations.map((item) => [item.stationId, "0"])), openingTankStocks: { petrol_tank: "10000", diesel_tank: "9000" }, staffAssignments: stations.map((item) => ({ nozzleId: item.stationId, staffId: "arun", staffName: "Arun" })) }} />);
+
+    const dateField = screen.getByLabelText("Active business date");
+    expect(dateField).toHaveAttribute("max", "2026-09-04");
+    fireEvent.change(dateField, { target: { value: "2026-10-04" } });
+    expect(screen.getByRole("button", { name: /save date/i })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("2026-10-04 is in the future. Choose today (2026-09-04) or an earlier day.");
   });
 
   it("asks the server to roll a stale active day forward automatically and refreshes when it advances", async () => {
