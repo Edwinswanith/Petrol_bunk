@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
 import { businessDate, businessTimeLabel } from "@/lib/business-time";
 import { findMissingBusinessDays } from "@/server/services/missing-business-days-service";
+import { DataTable } from "@/components/ui/data-table";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function ShiftsPage() {
       </section>
       <section className="panel panel-pad reveal reveal-3">
         <div className="panel-header"><div><p className="panel-kicker">Current ledger</p><h2 className="panel-title">Business day timeline</h2></div></div>
-        <table className="data-table">
+        <DataTable>
           <thead><tr><th>Shift</th><th>Status</th><th>Staff note</th><th>Started</th><th>Action</th></tr></thead>
           <tbody>
             {shifts.map((shift) => (
@@ -41,7 +42,7 @@ export default async function ShiftsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </DataTable>
       </section>
     </main>
   );

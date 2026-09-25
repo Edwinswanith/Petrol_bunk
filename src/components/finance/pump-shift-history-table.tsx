@@ -7,6 +7,7 @@ import { useState } from "react";
 import { PumpShiftCorrectionDialog } from "@/components/finance/pump-shift-correction-dialog";
 import { PumpShiftDeleteDialog } from "@/components/finance/pump-shift-delete-dialog";
 import type { FinancePumpShiftEntry } from "@/server/services/finance-analytics-service";
+import { DataTable } from "@/components/ui/data-table";
 
 type StaffOption = { id: string; name: string };
 
@@ -37,7 +38,7 @@ export function PumpShiftHistoryTable({
 
   return (
     <>
-      <table className="data-table">
+      <DataTable>
         <thead>
           <tr>
             {showDate ? <th>Date</th> : null}
@@ -59,7 +60,7 @@ export function PumpShiftHistoryTable({
             </tr>
           ))}
         </tbody>
-      </table>
+      </DataTable>
 
       {editingEntry ? (
         <PumpShiftCorrectionDialog entry={editingEntry} onClose={() => setEditingEntry(null)} staff={staff} stationLabels={stationLabels} />

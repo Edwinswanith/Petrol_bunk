@@ -32,20 +32,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      document.querySelectorAll<HTMLTableElement>(".data-table").forEach((table) => {
-        const labels = [...table.querySelectorAll("thead th")].map((heading) => heading.textContent?.trim() ?? "");
-        table.querySelectorAll("tbody tr").forEach((row) => {
-          [...row.children].forEach((cell, index) => {
-            if (cell instanceof HTMLTableCellElement && labels[index]) cell.dataset.label = labels[index];
-          });
-        });
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [pathname]);
-
-  useEffect(() => {
     const blurNumberInputOnWheel = () => {
       const active = document.activeElement;
       if (active instanceof HTMLInputElement && active.type === "number") active.blur();

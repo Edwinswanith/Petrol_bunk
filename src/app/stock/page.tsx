@@ -9,6 +9,7 @@ import { listExpenses, listFuelReceipts } from "@/server/repositories/journal-st
 import { getOperationsRepository } from "@/server/repositories/repository-provider";
 import { buildDashboardViewModel } from "@/server/services/dashboard-service";
 import { getForecourtConfigStore } from "@/server/repositories/forecourt-config-store";
+import { DataTable } from "@/components/ui/data-table";
 
 const lubricants = [
   { name: "Servo 4T 20W-40", pack: "1 L", stock: 18, reorder: 8, price: "₹420" },
@@ -54,7 +55,7 @@ export default async function StockPage() {
 
       <section className="panel panel-pad reveal reveal-4" id="lubricants" style={{ marginTop: 16 }}>
         <div className="panel-header"><div><p className="panel-kicker">Packaged inventory reference</p><h2 className="panel-title">Lubricants & add-ons</h2></div><span className="status-pill closed">Owner list</span></div>
-        <table className="data-table"><thead><tr><th>Product</th><th>Available</th><th>Reorder at</th><th>Selling price</th><th>Status</th></tr></thead><tbody>{lubricants.map((item) => <tr key={item.name}><td><span className="table-title">{item.name}</span><span className="table-subtitle">Pack size {item.pack}</span></td><td className="mono">{item.stock}</td><td>{item.reorder}</td><td>{item.price}</td><td><span className={`status-pill ${item.stock <= item.reorder ? "warning" : "healthy"}`}>{item.stock <= item.reorder ? "Reorder" : "Healthy"}</span></td></tr>)}</tbody></table>
+        <DataTable><thead><tr><th>Product</th><th>Available</th><th>Reorder at</th><th>Selling price</th><th>Status</th></tr></thead><tbody>{lubricants.map((item) => <tr key={item.name}><td><span className="table-title">{item.name}</span><span className="table-subtitle">Pack size {item.pack}</span></td><td className="mono">{item.stock}</td><td>{item.reorder}</td><td>{item.price}</td><td><span className={`status-pill ${item.stock <= item.reorder ? "warning" : "healthy"}`}>{item.stock <= item.reorder ? "Reorder" : "Healthy"}</span></td></tr>)}</tbody></DataTable>
       </section>
       <section className="panel panel-pad reveal reveal-4" style={{ marginTop: 16 }}>
         <div className="panel-header"><div><p className="panel-kicker">Delivery ledger</p><h2 className="panel-title">Recent fuel receipts</h2></div><Link className="button soft" href="/stock/receipts/new"><Plus size={14} /> Receive fuel</Link></div>

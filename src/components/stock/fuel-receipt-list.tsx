@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FuelProduct } from "@/server/domain/forecourt";
+import { DataTable } from "@/components/ui/data-table";
 
 export type ReceiptRow = {
   id: string; invoiceNumber: string; tankerNumber: string; product: string;
@@ -55,7 +56,7 @@ function VoidReceiptButton({ receipt }: { receipt: ReceiptRow }) {
 export function FuelReceiptList({ receipts, products }: { receipts: ReceiptRow[]; products: FuelProduct[] }) {
   if (!receipts.length) return <p className="empty-state">No fuel receipt has been recorded yet.</p>;
   return (
-    <table className="data-table">
+    <DataTable>
       <thead><tr><th>Invoice</th><th>Product</th><th>Accepted</th><th>Density @15°C</th><th>Supplier</th><th>Status</th><th /></tr></thead>
       <tbody>
         {receipts.slice(0, 12).map((receipt) => (
@@ -77,6 +78,6 @@ export function FuelReceiptList({ receipts, products }: { receipts: ReceiptRow[]
           </tr>
         ))}
       </tbody>
-    </table>
+    </DataTable>
   );
 }
