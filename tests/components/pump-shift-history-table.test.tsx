@@ -17,11 +17,21 @@ function entry(id: string, businessDate: string): FinancePumpShiftEntry {
 }
 
 describe("PumpShiftHistoryTable deletion eligibility", () => {
-  it("offers deletion only for an open entry on the current business date", () => {
+  it("shows delete on every row but enables it only for an open entry on the current business date", () => {
     render(<PumpShiftHistoryTable pumpShifts={[entry("today", "2026-09-24"), entry("old", "2026-09-23")]} staff={[]} stationLabels={{}} today="2026-09-24" />);
 
-    expect(screen.getByRole("button", { name: "Delete Today Operator's Pump A entry" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Delete Older Operator's Pump A entry" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Today Operator's Pump A entry" })).toBeEnabled();
+    const older = screen.getByRole("button", { name: "Delete Older Operator's Pump A entry" });
+    expect(older).toBeDisabled();
+    expect(older).toHaveAttribute("title", "Only today's entries can be deleted");
     expect(screen.getAllByRole("button", { name: /Correct .* entry/ })).toHaveLength(2);
+  });
+
+  it("shows a disabled delete for entries of a closed day", () => {
+    render(<PumpShiftHistoryTable pumpShifts={[{ ...entry("today", "2026-09-24"), shiftState: "CLOSED" }]} staff={[]} stationLabels={{}} today="2026-09-24" />);
+
+    const button = screen.getByRole("button", { name: "Delete Today Operator's Pump A entry" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Closed days cannot be changed");
   });
 });

@@ -34,6 +34,39 @@ describe("PumpShiftCorrectionDialog", () => {
     expect(screen.getByRole("combobox")).toHaveValue("staff-arun");
   });
 
+  it("shows each nozzle's opening as read-only and previews metered litres from the edited closing", async () => {
+    const user = userEvent.setup();
+    render(<PumpShiftCorrectionDialog entry={entry} onClose={vi.fn()} staff={staff} stationLabels={{ a_n1: "A-N1 · Petrol", a_n2: "A-N2 · Petrol" }} />);
+
+    const opening = screen.getByLabelText("A-N1 · Petrol opening");
+    expect(opening).toHaveValue("1000");
+    expect(opening).toHaveAttribute("readonly");
+    expect(screen.getByText("Metered: 100.000 L")).toBeInTheDocument();
+
+    const closing = screen.getByLabelText("A-N1 · Petrol closing");
+    await user.clear(closing);
+    await user.type(closing, "1120.5");
+    expect(screen.getByText("Metered: 120.500 L")).toBeInTheDocument();
+
+    await user.clear(closing);
+    await user.type(closing, "990");
+    expect(screen.getByText("Closing is below opening")).toBeInTheDocument();
+  });
+
+  it("does not send opening readings, so the correction cannot break the reading chain", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ pumpShiftHistory: [entry] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PumpShiftCorrectionDialog entry={entry} onClose={vi.fn()} staff={staff} stationLabels={{ a_n1: "A-N1 · Petrol", a_n2: "A-N2 · Petrol" }} />);
+
+    await user.type(screen.getByPlaceholderText("What was wrong and why?"), "Checking readings");
+    await user.click(screen.getByRole("button", { name: "Save correction" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).not.toHaveProperty("openingNozzleReadings");
+  });
+
   it("submits the correction and shows the before/after summary including any cascaded entry", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn(async () => ({

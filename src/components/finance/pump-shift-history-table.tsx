@@ -13,6 +13,13 @@ type StaffOption = { id: string; name: string };
 const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 const formatMoney = (value: string) => money.format(Number(value));
 
+// Mirrors the server rule in applyPumpShiftEntryVoid: only today's entries on the open day can be deleted.
+function deleteBlockedReason(entry: FinancePumpShiftEntry, today: string) {
+  if (entry.shiftState !== "OPEN") return "Closed days cannot be changed";
+  if (entry.businessDate !== today) return "Only today's entries can be deleted";
+  return undefined;
+}
+
 export function PumpShiftHistoryTable({
   pumpShifts,
   stationLabels,
@@ -48,7 +55,7 @@ export function PumpShiftHistoryTable({
               <td className="mono">{formatMoney(entry.expectedSalesValue)}</td>
               <td className="mono">{formatMoney(entry.accountedTender)}</td>
               <td className={`mono ${Number(entry.tenderVariance) < 0 ? "loss-value" : "profit-value"}`}>{formatMoney(entry.tenderVariance)}</td>
-              <td>{entry.shiftState === "OPEN" ? <span className="pump-shift-row-actions"><button aria-label={`Correct ${entry.staffName}'s ${entry.pumpLabel} entry`} className="button ghost" onClick={() => setEditingEntry(entry)} type="button"><Pencil size={14} /></button>{entry.businessDate === today ? <PumpShiftDeleteDialog entry={entry} /> : null}</span> : null}</td>
+              <td><span className="pump-shift-row-actions">{entry.shiftState === "OPEN" ? <button aria-label={`Correct ${entry.staffName}'s ${entry.pumpLabel} entry`} className="button ghost" onClick={() => setEditingEntry(entry)} type="button"><Pencil size={14} /></button> : null}<PumpShiftDeleteDialog disabledReason={deleteBlockedReason(entry, today)} entry={entry} /></span></td>
             </tr>
           ))}
         </tbody>

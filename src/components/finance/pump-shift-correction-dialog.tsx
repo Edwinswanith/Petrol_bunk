@@ -1,5 +1,6 @@
 "use client";
 
+import Decimal from "decimal.js";
 import { CheckCircle2, Save, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -11,6 +12,12 @@ type CorrectionResult = { entry: FinancePumpShiftEntry; cascaded: FinancePumpShi
 
 const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 const formatMoney = (value: string) => money.format(Number(value));
+
+// Preview only; the server recomputes litres and sales on save.
+function meteredLitres(opening: string | undefined, closing: string | undefined): string | null {
+  if (!opening || !closing) return null;
+  try { return new Decimal(closing).minus(opening).toFixed(3); } catch { return null; }
+}
 
 export function PumpShiftCorrectionDialog({
   entry,
@@ -113,19 +120,31 @@ export function PumpShiftCorrectionDialog({
           </div>
 
           <div className="form-grid three">
-            {stationIds.map((stationId) => (
-              <label className="field" key={stationId}>
-                <span>{stationLabels[stationId] ?? stationId} · closing</span>
-                <span className="input-wrap">
-                  <input min="0" onChange={(event) => setClosingNozzleReadings({ ...closingNozzleReadings, [stationId]: event.target.value })} required step="0.001" type="number" value={closingNozzleReadings[stationId] ?? ""} />
-                  <span className="unit">L</span>
-                </span>
-                <span className="input-wrap">
-                  <input aria-label={`${stationLabels[stationId] ?? stationId} test fuel`} min="0" onChange={(event) => setTestFuel({ ...testFuel, [stationId]: event.target.value })} step="0.001" type="number" value={testFuel[stationId] ?? "0"} />
-                  <span className="unit">test L</span>
-                </span>
-              </label>
-            ))}
+            {stationIds.map((stationId) => {
+              const label = stationLabels[stationId] ?? stationId;
+              const metered = meteredLitres(entry.openingNozzleReadings[stationId], closingNozzleReadings[stationId]);
+              return (
+                <div className="field" key={stationId}>
+                  <span>{label}</span>
+                  {/* Opening is the previous entry's closing, so it is shown for reference but corrected only through that closing. */}
+                  <span className="input-wrap">
+                    <input aria-label={`${label} opening`} className="readonly-reading" readOnly tabIndex={-1} title="Opening follows the previous entry's closing" type="text" value={entry.openingNozzleReadings[stationId] ?? "—"} />
+                    <span className="unit">opening L</span>
+                  </span>
+                  <span className="input-wrap">
+                    <input aria-label={`${label} closing`} min="0" onChange={(event) => setClosingNozzleReadings({ ...closingNozzleReadings, [stationId]: event.target.value })} required step="0.001" type="number" value={closingNozzleReadings[stationId] ?? ""} />
+                    <span className="unit">closing L</span>
+                  </span>
+                  <span className="input-wrap">
+                    <input aria-label={`${label} test fuel`} min="0" onChange={(event) => setTestFuel({ ...testFuel, [stationId]: event.target.value })} step="0.001" type="number" value={testFuel[stationId] ?? "0"} />
+                    <span className="unit">test L</span>
+                  </span>
+                  <small className={`correction-metered${metered?.startsWith("-") ? " below-opening" : ""}`}>
+                    {metered === null ? "Metered: —" : metered.startsWith("-") ? "Closing is below opening" : `Metered: ${metered} L`}
+                  </small>
+                </div>
+              );
+            })}
           </div>
 
           <div className="form-grid three">

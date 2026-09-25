@@ -21,7 +21,7 @@ export type DeletablePumpShiftEntry = {
 
 const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
-export function PumpShiftDeleteDialog({ entry, onDeleted }: { entry: DeletablePumpShiftEntry; onDeleted?: (shift: ShiftRecord) => void }) {
+export function PumpShiftDeleteDialog({ entry, onDeleted, disabledReason }: { entry: DeletablePumpShiftEntry; onDeleted?: (shift: ShiftRecord) => void; disabledReason?: string }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
@@ -56,7 +56,7 @@ export function PumpShiftDeleteDialog({ entry, onDeleted }: { entry: DeletablePu
   }
 
   return <>
-    <button aria-label={`Delete ${entry.staffName}'s ${entry.pumpLabel} entry`} className="button ghost danger" onClick={() => setOpen(true)} type="button"><Trash2 size={14} /></button>
+    <button aria-label={`Delete ${entry.staffName}'s ${entry.pumpLabel} entry`} className="button ghost danger" disabled={Boolean(disabledReason)} onClick={() => setOpen(true)} title={disabledReason} type="button"><Trash2 size={14} /></button>
     {open ? <dialog className="pump-correction-dialog pump-delete-dialog" onClose={close} ref={dialogRef}>
       <header className="dialog-header">
         <div><p className="panel-kicker">Today only · open shift</p><h2 className="panel-title">Delete today’s entry?</h2></div>
